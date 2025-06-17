@@ -18,7 +18,7 @@ export const defaultUtilities: Record<string, string> = {
   "19122": "PECO Energy",
   "16637": "Penelec",
   "08001": "Atlantic City Electric",
-  "07083": "Public Service Electric & Gas (NSEG)",
+  "07083": "Public Service Electric & Gas (PSEG)",
   "07885": "JCPL",
   "01069": "Nat Grid - MA"
 };
@@ -33,135 +33,55 @@ export class PowerSetterScraper {
   }
 
   async startScraping(): Promise<PowerSetterData[]> {
-    const results: PowerSetterData[] = [];
-    const totalZipCodes = this.config.zipCodes.length;
-    
-    console.log(`🚀 Starting PowerSetter scraping for ${totalZipCodes} ZIP codes via Edge Function`);
-    
-    for (let i = 0; i < totalZipCodes; i++) {
-      const zipCode = this.config.zipCodes[i];
-      
-      try {
-        console.log(`📍 Processing ZIP code ${zipCode} (${i + 1}/${totalZipCodes})`);
-        
-        // Add delay between requests to avoid rate limiting
-        if (i > 0) {
-          console.log(`⏱️ Waiting ${this.config.delayBetweenRequests}ms before next request...`);
-          await this.delay(this.config.delayBetweenRequests);
-        }
-        
-        const scrapedData = await this.scrapeZipCodeViaEdgeFunction(zipCode);
-        
-        if (scrapedData.length > 0) {
-          results.push(...scrapedData);
-          console.log(`✅ Successfully scraped ${scrapedData.length} plans for ZIP ${zipCode}`);
-          
-          // Store data in Supabase immediately after scraping each ZIP
-          try {
-            await insertPowerSetterData(scrapedData);
-            console.log(`💾 Stored ${scrapedData.length} records for ZIP ${zipCode} in database`);
-          } catch (error) {
-            console.error(`❌ Failed to store data for ZIP ${zipCode}:`, error);
-          }
-        } else {
-          console.warn(`⚠️ No plans found for ZIP ${zipCode}`);
-        }
-        
-        // Update progress
-        const progress = Math.round(((i + 1) / totalZipCodes) * 100);
-        const itemsScraped = results.length;
-        
-        if (this.onProgress) {
-          this.onProgress(progress, itemsScraped);
-        }
-        
-      } catch (error) {
-        console.error(`❌ Error scraping ZIP ${zipCode}:`, error);
-        
-        // Try retries if configured
-        let retryCount = 0;
-        while (retryCount < this.config.maxRetries) {
-          retryCount++;
-          console.log(`🔄 Retry ${retryCount}/${this.config.maxRetries} for ZIP ${zipCode}`);
-          
-          try {
-            await this.delay(this.config.delayBetweenRequests * 2); // Longer delay for retries
-            const retryData = await this.scrapeZipCodeViaEdgeFunction(zipCode);
-            
-            if (retryData.length > 0) {
-              results.push(...retryData);
-              console.log(`✅ Retry successful: ${retryData.length} plans for ZIP ${zipCode}`);
-              
-              try {
-                await insertPowerSetterData(retryData);
-                console.log(`💾 Stored retry data for ZIP ${zipCode}`);
-              } catch (storeError) {
-                console.error(`❌ Failed to store retry data for ZIP ${zipCode}:`, storeError);
-              }
-              break;
-            }
-          } catch (retryError) {
-            console.error(`❌ Retry ${retryCount} failed for ZIP ${zipCode}:`, retryError);
-            if (retryCount === this.config.maxRetries) {
-              console.error(`💀 All retries exhausted for ZIP ${zipCode}`);
-            }
-          }
-        }
-      }
-    }
-    
-    console.log(`🎉 Scraping completed! Total records: ${results.length}`);
-    return results;
-  }
-
-  private async scrapeZipCodeViaEdgeFunction(zipCode: string): Promise<PowerSetterData[]> {
-    console.log(`🔍 Scraping PowerSetter for ZIP code via Edge Function: ${zipCode}`);
+    console.log(`🚀 Starting REAL PowerSetter scraping for ${this.config.zipCodes.length} ZIP codes via Python backend`);
     
     try {
-      // Call the Supabase Edge Function instead of making direct requests
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/powersetter-scraper`;
-      
-      const headers = {
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-      };
-
-      const requestBody = {
-        zipCode: zipCode,
-        utility: defaultUtilities[zipCode] || "Unknown Utility"
-      };
-
-      console.log(`📡 Calling Edge Function: ${apiUrl}`);
-      console.log(`📦 Request payload:`, requestBody);
-      
-      const response = await fetch(apiUrl, {
+      // Call the Python backend API
+      const response = await fetch('http://localhost:5000/api/scrape', {
         method: 'POST',
-        headers: headers,
-        body: JSON.stringify(requestBody)
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          zipCodes: this.config.zipCodes,
+          delayBetweenRequests: this.config.delayBetweenRequests,
+          maxRetries: this.config.maxRetries,
+          headless: this.config.headless
+        })
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Edge Function HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+        throw new Error(`Backend API error: ${response.status} - ${errorText}`);
       }
 
       const result = await response.json();
-      console.log(`📄 Edge Function response:`, result);
       
-      // The Edge Function should return an array of PowerSetterData
-      if (result.success && Array.isArray(result.data)) {
-        console.log(`✅ Successfully received ${result.data.length} plans from Edge Function`);
-        return result.data;
-      } else if (result.error) {
-        throw new Error(`Edge Function error: ${result.error}`);
+      if (result.success) {
+        console.log(`✅ Successfully scraped ${result.recordCount} records from Python backend`);
+        
+        // Update progress to 100% since the backend handles the actual scraping
+        if (this.onProgress) {
+          this.onProgress(100, result.recordCount);
+        }
+        
+        // The Python backend already inserted the data into the database,
+        // so we don't need to call insertPowerSetterData here
+        
+        return []; // Return empty array since data is already in database
       } else {
-        console.warn(`⚠️ Unexpected response format from Edge Function`);
-        return [];
+        throw new Error(`Backend scraping failed: ${result.error}`);
       }
       
     } catch (error) {
-      console.error(`❌ Failed to scrape ZIP ${zipCode} via Edge Function:`, error);
-      return [];
+      console.error('❌ Python backend scraping failed:', error);
+      
+      // Check if it's a connection error to the backend
+      if (error.message.includes('fetch')) {
+        throw new Error('Cannot connect to Python backend. Please ensure the backend server is running on http://localhost:5000');
+      }
+      
+      throw error;
     }
   }
 

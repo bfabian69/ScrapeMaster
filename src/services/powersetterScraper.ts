@@ -1,7 +1,7 @@
 import { PowerSetterData, ScrapingConfig } from '../types/scraping';
 import { insertPowerSetterData } from './supabase';
 
-// Default utilities mapping from your Python script
+// Default utilities mapping from your Node.js script
 export const defaultUtilities: Record<string, string> = {
   "60021": "ComEd",
   "62634": "Ameren", 
@@ -33,10 +33,10 @@ export class PowerSetterScraper {
   }
 
   async startScraping(): Promise<PowerSetterData[]> {
-    console.log(`🚀 Starting REAL PowerSetter scraping for ${this.config.zipCodes.length} ZIP codes via Python backend`);
+    console.log(`🚀 Starting REAL PowerSetter scraping for ${this.config.zipCodes.length} ZIP codes via Node.js backend`);
     
     try {
-      // Call the Python backend API
+      // Call the Node.js backend API
       const response = await fetch('http://localhost:5000/api/scrape', {
         method: 'POST',
         headers: {
@@ -58,14 +58,14 @@ export class PowerSetterScraper {
       const result = await response.json();
       
       if (result.success) {
-        console.log(`✅ Successfully scraped ${result.recordCount} records from Python backend`);
+        console.log(`✅ Successfully scraped ${result.recordCount} records from Node.js backend`);
         
         // Update progress to 100% since the backend handles the actual scraping
         if (this.onProgress) {
           this.onProgress(100, result.recordCount);
         }
         
-        // The Python backend already inserted the data into the database,
+        // The Node.js backend already inserted the data into the database,
         // so we don't need to call insertPowerSetterData here
         
         return []; // Return empty array since data is already in database
@@ -74,11 +74,11 @@ export class PowerSetterScraper {
       }
       
     } catch (error) {
-      console.error('❌ Python backend scraping failed:', error);
+      console.error('❌ Node.js backend scraping failed:', error);
       
       // Check if it's a connection error to the backend
       if (error.message.includes('fetch')) {
-        throw new Error('Cannot connect to Python backend. Please ensure the backend server is running on http://localhost:5000');
+        throw new Error('Cannot connect to Node.js backend. Please ensure the backend server is running on http://localhost:5000');
       }
       
       throw error;

@@ -36,24 +36,35 @@ export class PowerSetterScraper {
     const results: PowerSetterData[] = [];
     const totalZipCodes = this.config.zipCodes.length;
     
+    console.log(`🚀 Starting PowerSetter scraping for ${totalZipCodes} ZIP codes`);
+    
     for (let i = 0; i < totalZipCodes; i++) {
       const zipCode = this.config.zipCodes[i];
       
       try {
-        // Simulate scraping process with realistic delays
-        await this.delay(this.config.delayBetweenRequests);
+        console.log(`📍 Processing ZIP code ${zipCode} (${i + 1}/${totalZipCodes})`);
+        
+        // Add delay between requests to avoid rate limiting
+        if (i > 0) {
+          console.log(`⏱️ Waiting ${this.config.delayBetweenRequests}ms before next request...`);
+          await this.delay(this.config.delayBetweenRequests);
+        }
         
         const scrapedData = await this.scrapeZipCode(zipCode);
-        results.push(...scrapedData);
         
-        // Store data in Supabase immediately after scraping each ZIP
         if (scrapedData.length > 0) {
+          results.push(...scrapedData);
+          console.log(`✅ Successfully scraped ${scrapedData.length} plans for ZIP ${zipCode}`);
+          
+          // Store data in Supabase immediately after scraping each ZIP
           try {
             await insertPowerSetterData(scrapedData);
-            console.log(`Stored ${scrapedData.length} records for ZIP ${zipCode}`);
+            console.log(`💾 Stored ${scrapedData.length} records for ZIP ${zipCode} in database`);
           } catch (error) {
-            console.error(`Failed to store data for ZIP ${zipCode}:`, error);
+            console.error(`❌ Failed to store data for ZIP ${zipCode}:`, error);
           }
+        } else {
+          console.warn(`⚠️ No plans found for ZIP ${zipCode}`);
         }
         
         // Update progress
@@ -65,78 +76,338 @@ export class PowerSetterScraper {
         }
         
       } catch (error) {
-        console.error(`Error scraping ZIP ${zipCode}:`, error);
-        // Continue with next ZIP code even if one fails
+        console.error(`❌ Error scraping ZIP ${zipCode}:`, error);
+        
+        // Try retries if configured
+        let retryCount = 0;
+        while (retryCount < this.config.maxRetries) {
+          retryCount++;
+          console.log(`🔄 Retry ${retryCount}/${this.config.maxRetries} for ZIP ${zipCode}`);
+          
+          try {
+            await this.delay(this.config.delayBetweenRequests * 2); // Longer delay for retries
+            const retryData = await this.scrapeZipCode(zipCode);
+            
+            if (retryData.length > 0) {
+              results.push(...retryData);
+              console.log(`✅ Retry successful: ${retryData.length} plans for ZIP ${zipCode}`);
+              
+              try {
+                await insertPowerSetterData(retryData);
+                console.log(`💾 Stored retry data for ZIP ${zipCode}`);
+              } catch (storeError) {
+                console.error(`❌ Failed to store retry data for ZIP ${zipCode}:`, storeError);
+              }
+              break;
+            }
+          } catch (retryError) {
+            console.error(`❌ Retry ${retryCount} failed for ZIP ${zipCode}:`, retryError);
+            if (retryCount === this.config.maxRetries) {
+              console.error(`💀 All retries exhausted for ZIP ${zipCode}`);
+            }
+          }
+        }
       }
     }
     
+    console.log(`🎉 Scraping completed! Total records: ${results.length}`);
     return results;
   }
 
   private async scrapeZipCode(zipCode: string): Promise<PowerSetterData[]> {
-    // This simulates the scraping logic from your Python script
-    // In a real implementation, this would call your actual scraping logic
+    console.log(`🔍 Scraping PowerSetter for ZIP code: ${zipCode}`);
     
-    const utility = defaultUtilities[zipCode] || "Unknown Utility";
-    const mockData: PowerSetterData[] = [];
-    
-    // Simulate 3-5 plans per ZIP code (matching your Python script)
-    const planCount = Math.floor(Math.random() * 3) + 3;
-    
-    // Realistic supplier logos that would be extracted from div.col-logo
-    const supplierLogos = [
-      "https://www.powersetter.com/images/suppliers/constellation-energy.png",
-      "https://www.powersetter.com/images/suppliers/direct-energy.png", 
-      "https://www.powersetter.com/images/suppliers/green-mountain-energy.png",
-      "https://www.powersetter.com/images/suppliers/nrg-energy.png",
-      "https://www.powersetter.com/images/suppliers/reliant-energy.png",
-      "https://www.powersetter.com/images/suppliers/txu-energy.png",
-      "https://www.powersetter.com/images/suppliers/vistra-energy.png",
-      "https://www.powersetter.com/images/suppliers/ambit-energy.png",
-      "https://www.powersetter.com/images/suppliers/cirro-energy.png",
-      "https://www.powersetter.com/images/suppliers/frontier-utilities.png"
-    ];
-    
-    for (let i = 0; i < planCount; i++) {
-      // Simulate extracting supplier logo from div.col-logo using the new method
-      const logoUrl = this.extractSupplierLogoFromHTML(supplierLogos);
+    try {
+      // Construct the PowerSetter URL for this ZIP code
+      const url = `https://www.powersetter.com/results?zip=${zipCode}`;
+      console.log(`📡 Fetching: ${url}`);
       
-      mockData.push({
-        zip_code: zipCode,
-        price_per_kwh: parseFloat((Math.random() * 5 + 8).toFixed(4)), // 8-13 cents
-        savings: `${Math.floor(Math.random() * 30 + 10)}%`,
-        terms: `${Math.floor(Math.random() * 24 + 12)} months`,
-        info: `Plan ${i + 1} details for ${utility}`,
-        green: Math.random() > 0.5 ? "100% Green" : "N",
-        supplier_logo_url: logoUrl, // Extracted from div.col-logo
-        signup_url: `https://www.powersetter.com/signup/${zipCode}/${i + 1}`,
-        utility: utility,
-        fee: Math.random() > 0.7 ? `$${Math.floor(Math.random() * 50 + 10)}` : "",
-        scraped_at: new Date().toISOString()
+      // Fetch the page
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'DNT': '1',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+        }
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const html = await response.text();
+      console.log(`📄 Received HTML response (${html.length} characters)`);
+      
+      // Parse the HTML and extract data
+      const extractedData = this.parseHTML(html, zipCode);
+      
+      if (extractedData.length === 0) {
+        console.warn(`⚠️ No data extracted from HTML for ZIP ${zipCode}`);
+        console.log('HTML preview:', html.substring(0, 500) + '...');
+      }
+      
+      return extractedData;
+      
+    } catch (error) {
+      console.error(`❌ Failed to scrape ZIP ${zipCode}:`, error);
+      
+      // If real scraping fails, return empty array instead of mock data
+      // This ensures we only get real data in the database
+      return [];
     }
+  }
+
+  private parseHTML(html: string, zipCode: string): PowerSetterData[] {
+    console.log(`🔧 Parsing HTML for ZIP ${zipCode}`);
     
-    return mockData;
+    try {
+      // Create a DOM parser
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      
+      const results: PowerSetterData[] = [];
+      const utility = defaultUtilities[zipCode] || "Unknown Utility";
+      
+      // Look for result rows - PowerSetter typically uses table rows or div containers
+      const resultSelectors = [
+        'tr.result-row',
+        '.result-row',
+        '.plan-row',
+        '.rate-row',
+        'tbody tr',
+        '.results-table tr',
+        '[data-plan]',
+        '.plan-container'
+      ];
+      
+      let resultElements: NodeListOf<Element> | null = null;
+      
+      // Try different selectors to find the results
+      for (const selector of resultSelectors) {
+        resultElements = doc.querySelectorAll(selector);
+        if (resultElements.length > 0) {
+          console.log(`✅ Found ${resultElements.length} results using selector: ${selector}`);
+          break;
+        }
+      }
+      
+      if (!resultElements || resultElements.length === 0) {
+        console.warn(`⚠️ No result elements found with any selector`);
+        
+        // Log some debug info about the page structure
+        const bodyText = doc.body?.textContent?.substring(0, 200) || 'No body content';
+        console.log('Page body preview:', bodyText);
+        
+        // Look for any tables or structured content
+        const tables = doc.querySelectorAll('table');
+        const divs = doc.querySelectorAll('div[class*="result"], div[class*="plan"], div[class*="rate"]');
+        console.log(`Found ${tables.length} tables and ${divs.length} potential result divs`);
+        
+        return [];
+      }
+      
+      // Process each result element
+      resultElements.forEach((element, index) => {
+        try {
+          console.log(`🔍 Processing result element ${index + 1}`);
+          
+          const planData = this.extractPlanData(element, zipCode, utility);
+          if (planData) {
+            results.push(planData);
+            console.log(`✅ Extracted plan ${index + 1}: ${planData.price_per_kwh}¢/kWh`);
+          } else {
+            console.warn(`⚠️ Failed to extract data from result element ${index + 1}`);
+          }
+        } catch (error) {
+          console.error(`❌ Error processing result element ${index + 1}:`, error);
+        }
+      });
+      
+      console.log(`📊 Extracted ${results.length} plans for ZIP ${zipCode}`);
+      return results;
+      
+    } catch (error) {
+      console.error(`❌ Error parsing HTML for ZIP ${zipCode}:`, error);
+      return [];
+    }
   }
 
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  // Simulate extracting supplier logo from div.col-logo (for mock data)
-  private extractSupplierLogoFromHTML(availableLogos: string[]): string {
-    // In real implementation, this would parse the actual HTML
-    return availableLogos[Math.floor(Math.random() * availableLogos.length)];
+  private extractPlanData(element: Element, zipCode: string, utility: string): PowerSetterData | null {
+    try {
+      // Extract price per kWh
+      const priceSelectors = [
+        '.price',
+        '.rate',
+        '.cost',
+        '[class*="price"]',
+        '[class*="rate"]',
+        '[class*="cost"]',
+        'td:nth-child(2)', // Common position for price in tables
+        '.col-price',
+        '.price-value'
+      ];
+      
+      let priceText = '';
+      for (const selector of priceSelectors) {
+        const priceElement = element.querySelector(selector);
+        if (priceElement) {
+          priceText = priceElement.textContent?.trim() || '';
+          if (priceText) break;
+        }
+      }
+      
+      // Extract numeric price
+      const priceMatch = priceText.match(/(\d+\.?\d*)/);
+      const price = priceMatch ? parseFloat(priceMatch[1]) : 0;
+      
+      if (price === 0) {
+        console.warn('⚠️ No valid price found in element');
+        return null;
+      }
+      
+      // Extract supplier logo from div.col-logo
+      const supplierLogo = this.extractSupplierLogo(element);
+      
+      // Extract terms
+      const termsSelectors = [
+        '.terms',
+        '.contract',
+        '.duration',
+        '[class*="term"]',
+        '[class*="contract"]',
+        '[class*="duration"]',
+        'td:nth-child(3)', // Common position for terms
+        '.col-terms'
+      ];
+      
+      let terms = '';
+      for (const selector of termsSelectors) {
+        const termsElement = element.querySelector(selector);
+        if (termsElement) {
+          terms = termsElement.textContent?.trim() || '';
+          if (terms) break;
+        }
+      }
+      
+      // Extract green/renewable info
+      const greenSelectors = [
+        '.green',
+        '.renewable',
+        '.eco',
+        '[class*="green"]',
+        '[class*="renewable"]',
+        '[class*="eco"]',
+        '.col-green'
+      ];
+      
+      let green = 'N';
+      for (const selector of greenSelectors) {
+        const greenElement = element.querySelector(selector);
+        if (greenElement) {
+          const greenText = greenElement.textContent?.trim() || '';
+          if (greenText && greenText.toLowerCase() !== 'n' && greenText.toLowerCase() !== 'no') {
+            green = greenText;
+            break;
+          }
+        }
+      }
+      
+      // Extract signup URL
+      const signupSelectors = [
+        'a[href*="signup"]',
+        'a[href*="enroll"]',
+        'a[href*="apply"]',
+        '.signup-link',
+        '.enroll-link',
+        '.apply-link'
+      ];
+      
+      let signupUrl = '';
+      for (const selector of signupSelectors) {
+        const signupElement = element.querySelector(selector);
+        if (signupElement) {
+          signupUrl = signupElement.getAttribute('href') || '';
+          if (signupUrl) {
+            signupUrl = this.normalizeUrl(signupUrl);
+            break;
+          }
+        }
+      }
+      
+      // Extract fee information
+      const feeSelectors = [
+        '.fee',
+        '.fees',
+        '.cost',
+        '[class*="fee"]',
+        '.col-fee'
+      ];
+      
+      let fee = '';
+      for (const selector of feeSelectors) {
+        const feeElement = element.querySelector(selector);
+        if (feeElement) {
+          const feeText = feeElement.textContent?.trim() || '';
+          if (feeText && !feeText.toLowerCase().includes('no fee')) {
+            fee = feeText;
+            break;
+          }
+        }
+      }
+      
+      // Extract savings information
+      const savingsSelectors = [
+        '.savings',
+        '.save',
+        '[class*="saving"]',
+        '[class*="save"]',
+        '.col-savings'
+      ];
+      
+      let savings = '';
+      for (const selector of savingsSelectors) {
+        const savingsElement = element.querySelector(selector);
+        if (savingsElement) {
+          savings = savingsElement.textContent?.trim() || '';
+          if (savings) break;
+        }
+      }
+      
+      // Create the plan data object
+      const planData: PowerSetterData = {
+        zip_code: zipCode,
+        price_per_kwh: price,
+        savings: savings || '',
+        terms: terms || 'Not specified',
+        info: `Plan extracted from PowerSetter for ${utility}`,
+        green: green,
+        supplier_logo_url: supplierLogo,
+        signup_url: signupUrl,
+        utility: utility,
+        fee: fee || '',
+        scraped_at: new Date().toISOString()
+      };
+      
+      return planData;
+      
+    } catch (error) {
+      console.error('❌ Error extracting plan data:', error);
+      return null;
+    }
   }
 
   // Method to extract supplier logo from PowerSetter HTML structure
-  // This is the actual implementation that would be used with real HTML
-  private extractSupplierLogo(htmlElement: any): string {
+  private extractSupplierLogo(element: Element): string {
     try {
-      console.log('🔍 Extracting supplier logo from HTML element...');
+      console.log('🔍 Extracting supplier logo from element...');
       
       // Look for the logo in div.col-logo (PowerSetter structure)
-      const logoDiv = htmlElement.querySelector('div.col-logo');
+      const logoDiv = element.querySelector('div.col-logo');
       if (logoDiv) {
         console.log('✅ Found div.col-logo element');
         
@@ -149,21 +420,21 @@ export class PowerSetterScraper {
           const src = imgTag.getAttribute('src');
           if (src && src.trim()) {
             console.log('🎯 Found src attribute:', src);
-            return this.normalizeLogoUrl(src);
+            return this.normalizeUrl(src);
           }
           
           // Check data-src attribute (lazy loading)
           const dataSrc = imgTag.getAttribute('data-src');
           if (dataSrc && dataSrc.trim()) {
             console.log('🎯 Found data-src attribute:', dataSrc);
-            return this.normalizeLogoUrl(dataSrc);
+            return this.normalizeUrl(dataSrc);
           }
           
           // Check data-original attribute (another lazy loading pattern)
           const dataOriginal = imgTag.getAttribute('data-original');
           if (dataOriginal && dataOriginal.trim()) {
             console.log('🎯 Found data-original attribute:', dataOriginal);
-            return this.normalizeLogoUrl(dataOriginal);
+            return this.normalizeUrl(dataOriginal);
           }
         }
         
@@ -174,30 +445,17 @@ export class PowerSetterScraper {
           const bgImageMatch = style.match(/background-image:\s*url\(['"]?([^'"]+)['"]?\)/i);
           if (bgImageMatch && bgImageMatch[1]) {
             console.log('🎯 Found background-image:', bgImageMatch[1]);
-            return this.normalizeLogoUrl(bgImageMatch[1]);
+            return this.normalizeUrl(bgImageMatch[1]);
           }
         }
         
-        // Method 3: Check for CSS background-image via computed styles (if available)
-        if (typeof window !== 'undefined' && window.getComputedStyle) {
-          const computedStyle = window.getComputedStyle(logoDiv);
-          const backgroundImage = computedStyle.backgroundImage;
-          if (backgroundImage && backgroundImage !== 'none') {
-            const urlMatch = backgroundImage.match(/url\(['"]?([^'"]+)['"]?\)/i);
-            if (urlMatch && urlMatch[1]) {
-              console.log('🎯 Found computed background-image:', urlMatch[1]);
-              return this.normalizeLogoUrl(urlMatch[1]);
-            }
-          }
-        }
-        
-        // Method 4: Look for nested elements with logo classes
+        // Method 3: Look for nested elements with logo classes
         const logoImg = logoDiv.querySelector('img[class*="logo"], img[class*="supplier"], .logo img, .supplier-logo img');
         if (logoImg) {
           const src = logoImg.getAttribute('src') || logoImg.getAttribute('data-src');
           if (src) {
             console.log('🎯 Found nested logo image:', src);
-            return this.normalizeLogoUrl(src);
+            return this.normalizeUrl(src);
           }
         }
         
@@ -212,22 +470,24 @@ export class PowerSetterScraper {
           'img[alt*="logo" i]',
           'img[alt*="supplier" i]',
           'img[src*="logo" i]',
-          'img[src*="supplier" i]'
+          'img[src*="supplier" i]',
+          '.col-supplier img',
+          '.supplier img'
         ];
         
         for (const selector of fallbackSelectors) {
-          const fallbackImg = htmlElement.querySelector(selector);
+          const fallbackImg = element.querySelector(selector);
           if (fallbackImg) {
             const src = fallbackImg.getAttribute('src') || fallbackImg.getAttribute('data-src');
             if (src) {
               console.log(`🔄 Found logo using fallback selector "${selector}":`, src);
-              return this.normalizeLogoUrl(src);
+              return this.normalizeUrl(src);
             }
           }
         }
       }
       
-      console.log('❌ No supplier logo found in HTML element');
+      console.log('❌ No supplier logo found in element');
       return ''; // Return empty string if no logo found
     } catch (error) {
       console.error('❌ Error extracting supplier logo:', error);
@@ -235,8 +495,8 @@ export class PowerSetterScraper {
     }
   }
 
-  // Helper method to normalize logo URLs
-  private normalizeLogoUrl(url: string): string {
+  // Helper method to normalize URLs
+  private normalizeUrl(url: string): string {
     if (!url || !url.trim()) {
       return '';
     }
@@ -256,41 +516,7 @@ export class PowerSetterScraper {
     }
   }
 
-  // Method to extract all data from a PowerSetter result row
-  private extractPowerSetterData(htmlElement: any, zipCode: string): PowerSetterData | null {
-    try {
-      // Extract supplier logo from div.col-logo
-      const supplierLogo = this.extractSupplierLogo(htmlElement);
-      
-      // Extract other data fields (you would implement these based on PowerSetter's HTML structure)
-      const priceElement = htmlElement.querySelector('.price, .rate, [class*="price"], [class*="rate"]');
-      const price = priceElement ? parseFloat(priceElement.textContent?.replace(/[^\d.]/g, '') || '0') : 0;
-      
-      const termsElement = htmlElement.querySelector('.terms, .contract, [class*="term"], [class*="contract"]');
-      const terms = termsElement ? termsElement.textContent?.trim() || '' : '';
-      
-      const greenElement = htmlElement.querySelector('.green, .renewable, [class*="green"], [class*="renewable"]');
-      const green = greenElement ? greenElement.textContent?.trim() || 'N' : 'N';
-      
-      const signupElement = htmlElement.querySelector('a[href*="signup"], a[href*="enroll"], .signup-link');
-      const signupUrl = signupElement ? signupElement.getAttribute('href') || '' : '';
-      
-      return {
-        zip_code: zipCode,
-        price_per_kwh: price,
-        savings: '', // Extract from HTML
-        terms: terms,
-        info: '', // Extract from HTML
-        green: green,
-        supplier_logo_url: supplierLogo,
-        signup_url: this.normalizeLogoUrl(signupUrl), // Use same normalization for URLs
-        utility: defaultUtilities[zipCode] || "Unknown Utility",
-        fee: '', // Extract from HTML
-        scraped_at: new Date().toISOString()
-      };
-    } catch (error) {
-      console.error('Error extracting PowerSetter data:', error);
-      return null;
-    }
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }

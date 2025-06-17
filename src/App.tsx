@@ -20,8 +20,20 @@ import {
   Users,
   Smartphone,
   Monitor,
-  TrendingUp
+  TrendingUp,
+  MapPin,
+  Building2,
+  ExternalLink,
+  RefreshCw,
+  DollarSign,
+  Calendar,
+  Leaf,
+  Award,
+  Image
 } from 'lucide-react';
+import { PowerSetterConfig } from './components/PowerSetterConfig';
+import { ResultsViewer } from './components/ResultsViewer';
+import { ScrapedDataViewer } from './components/ScrapedDataViewer';
 
 interface ScrapingJob {
   id: string;
@@ -51,6 +63,19 @@ function App() {
 
   const [newUrl, setNewUrl] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
+  const [powerSetterScraping, setPowerSetterScraping] = useState(false);
+
+  // Listen for navigation events
+  useEffect(() => {
+    const handleNavigate = (event: any) => {
+      if (event.detail) {
+        setActiveTab(event.detail);
+      }
+    };
+
+    window.addEventListener('navigate', handleNavigate);
+    return () => window.removeEventListener('navigate', handleNavigate);
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -83,6 +108,51 @@ function App() {
         setIsAnimating(false);
       }, 1000);
     }
+  };
+
+  const handlePowerSetterScraping = async (config: any) => {
+    setPowerSetterScraping(true);
+    
+    // Simulate scraping process
+    const newJob: ScrapingJob = {
+      id: Date.now().toString(),
+      url: 'https://powersetter.com',
+      status: 'running',
+      progress: 0,
+      itemsScraped: 0,
+      startTime: 'Just now',
+      dataType: 'powersetter',
+      zipCodes: config.zipCodes
+    };
+    
+    setScrapingJobs([...scrapingJobs, newJob]);
+    
+    // Simulate progress updates
+    let progress = 0;
+    const interval = setInterval(() => {
+      progress += Math.random() * 10;
+      if (progress >= 100) {
+        progress = 100;
+        clearInterval(interval);
+        setPowerSetterScraping(false);
+        
+        setScrapingJobs(jobs => 
+          jobs.map(job => 
+            job.id === newJob.id 
+              ? { ...job, status: 'completed' as const, progress: 100, itemsScraped: config.zipCodes.length * 5 }
+              : job
+          )
+        );
+      } else {
+        setScrapingJobs(jobs => 
+          jobs.map(job => 
+            job.id === newJob.id 
+              ? { ...job, progress, itemsScraped: Math.floor(progress / 20) * config.zipCodes.length }
+              : job
+          )
+        );
+      }
+    }, 1000);
   };
 
   const getStatusColor = (status: string) => {
@@ -435,11 +505,26 @@ function App() {
           </div>
         )}
 
-        {/* Other tabs would go here */}
-        {activeTab !== 'dashboard' && (
+        {activeTab === 'powersetter' && (
+          <PowerSetterConfig 
+            onStartScraping={handlePowerSetterScraping}
+            isRunning={powerSetterScraping}
+          />
+        )}
+
+        {activeTab === 'results' && (
+          <ResultsViewer />
+        )}
+
+        {activeTab === 'data' && (
+          <ScrapedDataViewer />
+        )}
+
+        {activeTab === 'settings' && (
           <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-200 text-center">
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">Coming Soon</h3>
-            <p className="text-gray-600">This section is under development.</p>
+            <Settings className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">Settings</h3>
+            <p className="text-gray-600">Configure your scraping preferences and account settings.</p>
           </div>
         )}
       </div>

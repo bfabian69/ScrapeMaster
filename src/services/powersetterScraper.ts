@@ -83,7 +83,22 @@ export class PowerSetterScraper {
     // Simulate 3-5 plans per ZIP code (matching your Python script)
     const planCount = Math.floor(Math.random() * 3) + 3;
     
+    // Sample supplier logos that would be extracted from div.col-logo
+    const supplierLogos = [
+      "https://www.powersetter.com/images/suppliers/constellation-logo.png",
+      "https://www.powersetter.com/images/suppliers/direct-energy-logo.png", 
+      "https://www.powersetter.com/images/suppliers/green-mountain-logo.png",
+      "https://www.powersetter.com/images/suppliers/nrg-logo.png",
+      "https://www.powersetter.com/images/suppliers/reliant-logo.png",
+      "https://www.powersetter.com/images/suppliers/txu-energy-logo.png",
+      "https://www.powersetter.com/images/suppliers/vistra-logo.png",
+      "https://www.powersetter.com/images/suppliers/ambit-energy-logo.png"
+    ];
+    
     for (let i = 0; i < planCount; i++) {
+      // Simulate extracting supplier logo from div.col-logo
+      const logoUrl = supplierLogos[Math.floor(Math.random() * supplierLogos.length)];
+      
       mockData.push({
         zip_code: zipCode,
         price_per_kwh: parseFloat((Math.random() * 5 + 8).toFixed(4)), // 8-13 cents
@@ -91,7 +106,7 @@ export class PowerSetterScraper {
         terms: `${Math.floor(Math.random() * 24 + 12)} months`,
         info: `Plan ${i + 1} details for ${utility}`,
         green: Math.random() > 0.5 ? "100% Green" : "N",
-        supplier_logo_url: `https://www.powersetter.com/images/supplier${i + 1}.png`,
+        supplier_logo_url: logoUrl, // This would be extracted from div.col-logo
         signup_url: `https://www.powersetter.com/signup/${zipCode}/${i + 1}`,
         utility: utility,
         fee: Math.random() > 0.7 ? `$${Math.floor(Math.random() * 50 + 10)}` : "",
@@ -104,5 +119,66 @@ export class PowerSetterScraper {
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // Method to extract supplier logo from PowerSetter HTML structure
+  private extractSupplierLogo(htmlElement: any): string {
+    try {
+      // Look for the logo in div.col-logo
+      const logoDiv = htmlElement.querySelector('div.col-logo');
+      if (logoDiv) {
+        // Check for img tag within the logo div
+        const imgTag = logoDiv.querySelector('img');
+        if (imgTag) {
+          const src = imgTag.getAttribute('src');
+          if (src) {
+            // Handle relative URLs by making them absolute
+            if (src.startsWith('/')) {
+              return `https://www.powersetter.com${src}`;
+            } else if (src.startsWith('http')) {
+              return src;
+            } else {
+              return `https://www.powersetter.com/${src}`;
+            }
+          }
+        }
+        
+        // Check for background-image in style attribute
+        const style = logoDiv.getAttribute('style');
+        if (style) {
+          const bgImageMatch = style.match(/background-image:\s*url\(['"]?([^'"]+)['"]?\)/);
+          if (bgImageMatch && bgImageMatch[1]) {
+            const bgImage = bgImageMatch[1];
+            if (bgImage.startsWith('/')) {
+              return `https://www.powersetter.com${bgImage}`;
+            } else if (bgImage.startsWith('http')) {
+              return bgImage;
+            } else {
+              return `https://www.powersetter.com/${bgImage}`;
+            }
+          }
+        }
+        
+        // Check for data-src attribute (lazy loading)
+        const dataSrc = logoDiv.querySelector('img[data-src]');
+        if (dataSrc) {
+          const src = dataSrc.getAttribute('data-src');
+          if (src) {
+            if (src.startsWith('/')) {
+              return `https://www.powersetter.com${src}`;
+            } else if (src.startsWith('http')) {
+              return src;
+            } else {
+              return `https://www.powersetter.com/${src}`;
+            }
+          }
+        }
+      }
+      
+      return ''; // Return empty string if no logo found
+    } catch (error) {
+      console.error('Error extracting supplier logo:', error);
+      return '';
+    }
   }
 }

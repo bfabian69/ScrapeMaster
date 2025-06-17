@@ -19,7 +19,8 @@ import {
   Play,
   CheckCircle,
   Shield,
-  XCircle
+  XCircle,
+  Image
 } from 'lucide-react';
 import { PowerSetterData } from '../types/scraping';
 import { getPowerSetterData, getUtilities, getPTCData, testConnection, insertPowerSetterData, checkDatabasePermissions } from '../services/supabase';
@@ -274,7 +275,7 @@ export const ResultsViewer: React.FC = () => {
         throw new Error('No INSERT permission. Please check your database RLS policies.');
       }
       
-      // Sample data based on your schema
+      // Sample data with realistic supplier logos (as they would be extracted from div.col-logo)
       const sampleData: PowerSetterData[] = [
         {
           zip_code: "60021",
@@ -283,7 +284,7 @@ export const ResultsViewer: React.FC = () => {
           terms: "12 months",
           info: "Fixed rate plan",
           green: "100% Green",
-          supplier_logo_url: "https://via.placeholder.com/100x50/4CAF50/white?text=Green+Power",
+          supplier_logo_url: "https://www.powersetter.com/images/suppliers/constellation-logo.png",
           signup_url: "https://example.com/signup/1",
           utility: "ComEd",
           fee: "$25 enrollment fee",
@@ -296,7 +297,7 @@ export const ResultsViewer: React.FC = () => {
           terms: "24 months",
           info: "Variable rate plan",
           green: "N",
-          supplier_logo_url: "https://via.placeholder.com/100x50/2196F3/white?text=Power+Co",
+          supplier_logo_url: "https://www.powersetter.com/images/suppliers/direct-energy-logo.png",
           signup_url: "https://example.com/signup/2",
           utility: "ComEd",
           fee: "",
@@ -309,7 +310,7 @@ export const ResultsViewer: React.FC = () => {
           terms: "18 months",
           info: "Introductory rate",
           green: "50% Green",
-          supplier_logo_url: "https://via.placeholder.com/100x50/FF9800/white?text=Energy+Plus",
+          supplier_logo_url: "https://www.powersetter.com/images/suppliers/green-mountain-logo.png",
           signup_url: "https://example.com/signup/3",
           utility: "Ameren",
           fee: "$15 monthly fee",
@@ -322,7 +323,7 @@ export const ResultsViewer: React.FC = () => {
           terms: "12 months",
           info: "Standard rate",
           green: "100% Green",
-          supplier_logo_url: "https://via.placeholder.com/100x50/4CAF50/white?text=Clean+Energy",
+          supplier_logo_url: "https://www.powersetter.com/images/suppliers/nrg-logo.png",
           signup_url: "https://example.com/signup/4",
           utility: "Eversource - NSTAR",
           fee: "",
@@ -335,7 +336,7 @@ export const ResultsViewer: React.FC = () => {
           terms: "36 months",
           info: "Long-term fixed rate",
           green: "N",
-          supplier_logo_url: "https://via.placeholder.com/100x50/9C27B0/white?text=Ohio+Power",
+          supplier_logo_url: "https://www.powersetter.com/images/suppliers/reliant-logo.png",
           signup_url: "https://example.com/signup/5",
           utility: "Ohio Edison",
           fee: "$10 connection fee",
@@ -417,6 +418,57 @@ export const ResultsViewer: React.FC = () => {
     if (!rate.price_per_kwh || !ptcPrice) return null;
     const savings = ((ptcPrice - rate.price_per_kwh) / ptcPrice) * 100;
     return savings > 0 ? savings.toFixed(1) : null;
+  };
+
+  // Component for supplier logo with fallback
+  const SupplierLogo: React.FC<{ logoUrl: string; supplierName?: string; className?: string }> = ({ 
+    logoUrl, 
+    supplierName = "Supplier", 
+    className = "h-8 w-auto max-w-20 object-contain" 
+  }) => {
+    const [imageError, setImageError] = useState(false);
+    const [imageLoaded, setImageLoaded] = useState(false);
+
+    const handleImageError = () => {
+      setImageError(true);
+      setImageLoaded(false);
+    };
+
+    const handleImageLoad = () => {
+      setImageLoaded(true);
+      setImageError(false);
+    };
+
+    if (!logoUrl || imageError) {
+      return (
+        <div className={`${className} bg-gray-100 border border-gray-200 rounded flex items-center justify-center`}>
+          <div className="flex flex-col items-center justify-center p-2">
+            <Image className="w-4 h-4 text-gray-400 mb-1" />
+            <span className="text-xs text-gray-500 text-center leading-tight">
+              {supplierName.length > 10 ? supplierName.substring(0, 10) + '...' : supplierName}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="relative">
+        <img 
+          src={logoUrl}
+          alt={`${supplierName} Logo`}
+          className={className}
+          onError={handleImageError}
+          onLoad={handleImageLoad}
+          style={{ display: imageLoaded ? 'block' : 'none' }}
+        />
+        {!imageLoaded && !imageError && (
+          <div className={`${className} bg-gray-100 border border-gray-200 rounded flex items-center justify-center animate-pulse`}>
+            <div className="w-4 h-4 bg-gray-300 rounded"></div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   if (utilitiesLoading) {
@@ -607,7 +659,7 @@ export const ResultsViewer: React.FC = () => {
                     <div className="flex-1">
                       <h4 className="font-medium text-yellow-800">Option 2: Add Sample Data</h4>
                       <p className="text-sm text-yellow-600">
-                        Add sample energy rate data to test the interface (5 sample records with ComEd, Ameren, Eversource, Ohio Edison)
+                        Add sample energy rate data to test the interface (5 sample records with realistic supplier logos)
                       </p>
                     </div>
                     <button
@@ -644,7 +696,7 @@ export const ResultsViewer: React.FC = () => {
             <div>
               <h3 className="text-sm font-medium text-blue-800">Adding Sample Data</h3>
               <p className="text-sm text-blue-700 mt-1">
-                Inserting 5 sample energy rate records and refreshing the interface...
+                Inserting 5 sample energy rate records with supplier logos and refreshing the interface...
               </p>
             </div>
           </div>
@@ -774,20 +826,11 @@ export const ResultsViewer: React.FC = () => {
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  {rate.supplier_logo_url ? (
-                                    <img 
-                                      src={rate.supplier_logo_url} 
-                                      alt="Supplier Logo" 
-                                      className="h-8 w-auto max-w-20 object-contain"
-                                      onError={(e) => {
-                                        e.currentTarget.style.display = 'none';
-                                        e.currentTarget.nextElementSibling!.style.display = 'block';
-                                      }}
-                                    />
-                                  ) : null}
-                                  <span className="text-sm text-gray-500" style={{ display: rate.supplier_logo_url ? 'none' : 'block' }}>
-                                    Supplier Logo
-                                  </span>
+                                  <SupplierLogo 
+                                    logoUrl={rate.supplier_logo_url} 
+                                    supplierName="Energy Supplier"
+                                    className="h-8 w-auto max-w-24 object-contain"
+                                  />
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center space-x-2">

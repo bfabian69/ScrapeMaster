@@ -28,13 +28,6 @@ const defaultUtilities: Record<string, string> = {
   "01069": "Nat Grid - MA"
 };
 
-interface ScrapingConfig {
-  zipCodes: string[];
-  delayBetweenRequests: number;
-  maxRetries: number;
-  headless: boolean;
-}
-
 interface PowerSetterData {
   zip_code: string;
   price_per_kwh: number;
@@ -49,15 +42,14 @@ interface PowerSetterData {
   scraped_at: string;
 }
 
-async function scrapeZipCode(zipCode: string, config: ScrapingConfig): Promise<PowerSetterData[]> {
+async function scrapeZipCode(zipCode: string, utility: string): Promise<PowerSetterData[]> {
   // This would be where you implement the actual scraping logic
   // For now, we'll simulate the scraping process
   
-  const utility = defaultUtilities[zipCode] || "Unknown Utility";
   const results: PowerSetterData[] = [];
   
   // Simulate scraping delay
-  await new Promise(resolve => setTimeout(resolve, config.delayBetweenRequests));
+  await new Promise(resolve => setTimeout(resolve, 1000));
   
   // Simulate 3-5 plans per ZIP code (matching your Python script logic)
   const planCount = Math.floor(Math.random() * 3) + 3;
@@ -92,43 +84,34 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { config }: { config: ScrapingConfig } = await req.json()
+    const { zipCode, utility }: { zipCode: string; utility: string } = await req.json()
     
-    if (!config || !config.zipCodes || config.zipCodes.length === 0) {
-      throw new Error('Invalid configuration: zipCodes required')
+    if (!zipCode) {
+      throw new Error('Invalid request: zipCode required')
     }
 
-    const allResults: PowerSetterData[] = []
+    const finalUtility = utility || defaultUtilities[zipCode] || "Unknown Utility";
     
-    // Process each ZIP code
-    for (const zipCode of config.zipCodes) {
-      try {
-        console.log(`Processing ZIP ${zipCode}`)
-        const results = await scrapeZipCode(zipCode, config)
-        allResults.push(...results)
-        
-        // Insert results into database
-        if (results.length > 0) {
-          const { error: insertError } = await supabaseClient
-            .from('powersetter')
-            .insert(results)
-          
-          if (insertError) {
-            console.error(`Error inserting data for ZIP ${zipCode}:`, insertError)
-          }
-        }
-        
-      } catch (error) {
-        console.error(`Error scraping ZIP ${zipCode}:`, error)
-        // Continue with next ZIP code
+    console.log(`Processing ZIP ${zipCode} for utility ${finalUtility}`)
+    const results = await scrapeZipCode(zipCode, finalUtility)
+    
+    // Insert results into database
+    if (results.length > 0) {
+      const { error: insertError } = await supabaseClient
+        .from('powersetter')
+        .insert(results)
+      
+      if (insertError) {
+        console.error(`Error inserting data for ZIP ${zipCode}:`, insertError)
+        throw new Error(`Database insertion failed: ${insertError.message}`)
       }
     }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Scraped ${allResults.length} records from ${config.zipCodes.length} ZIP codes`,
-        data: allResults 
+        message: `Scraped ${results.length} records for ZIP ${zipCode}`,
+        data: results 
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

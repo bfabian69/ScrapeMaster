@@ -79,7 +79,7 @@ export const ResultsViewer: React.FC = () => {
       await checkPermissions();
       
       // Step 3: Load utilities
-      setDebugInfo('Loading utilities...');
+      setDebugInfo('Loading utilities from powersetter table...');
       await loadUtilities();
       
       // Step 4: Load PTC data
@@ -104,7 +104,7 @@ export const ResultsViewer: React.FC = () => {
       if (result.success) {
         console.log('✅ Database connection successful');
         setConnectionStatus('connected');
-        setDebugInfo(`Connected successfully. Found ${result.recordCount || 0} records in database.`);
+        setDebugInfo(`Connected successfully. Found ${result.recordCount || 0} records in powersetter table.`);
       } else {
         console.error('❌ Database connection failed:', result.error);
         setConnectionStatus('error');
@@ -140,7 +140,7 @@ export const ResultsViewer: React.FC = () => {
 
   const loadUtilities = async () => {
     try {
-      console.log('=== Loading Utilities ===');
+      console.log('=== Loading Utilities from PowerSetter Table ===');
       setUtilitiesLoading(true);
       
       const utilitiesList = await getUtilities();
@@ -149,8 +149,8 @@ export const ResultsViewer: React.FC = () => {
       setUtilities(utilitiesList);
       
       if (utilitiesList.length === 0) {
-        console.warn('⚠️ No utilities found in database');
-        setDebugInfo('No utilities found. The powersetter table may be empty or have no utility data.');
+        console.warn('⚠️ No utilities found in powersetter table');
+        setDebugInfo('No utilities found in powersetter table. The table may be empty or have no utility data.');
         
         // Get sample data for debugging
         try {
@@ -162,7 +162,7 @@ export const ResultsViewer: React.FC = () => {
             console.log('Utilities found in sample data:', utilitiesInData);
             setDebugInfo(`Found ${sampleData.length} total records, but utilities extraction failed. Sample utilities: ${utilitiesInData.join(', ')}`);
           } else {
-            setDebugInfo('No data found in powersetter table.');
+            setDebugInfo('No data found in powersetter table. Please add some data first.');
           }
         } catch (sampleError) {
           console.error('Failed to get sample data:', sampleError);
@@ -173,7 +173,7 @@ export const ResultsViewer: React.FC = () => {
           }
         }
       } else {
-        setDebugInfo(`Successfully loaded ${utilitiesList.length} utilities: ${utilitiesList.join(', ')}`);
+        setDebugInfo(`Successfully loaded ${utilitiesList.length} utilities from powersetter table: ${utilitiesList.join(', ')}`);
       }
     } catch (error) {
       console.error('❌ Error loading utilities:', error);
@@ -353,7 +353,7 @@ export const ResultsViewer: React.FC = () => {
       
       // Force refresh all data
       console.log('🔄 Refreshing all data after sample insertion...');
-      setDebugInfo('Sample data added successfully. Refreshing...');
+      setDebugInfo('Sample data added successfully. Refreshing utilities dropdown...');
       
       // Reset states
       setUtilities([]);
@@ -366,7 +366,7 @@ export const ResultsViewer: React.FC = () => {
       await loadUtilities();
       await loadPTCData();
       
-      setDebugInfo(`Successfully added ${sampleData.length} sample records and refreshed data.`);
+      setDebugInfo(`Successfully added ${sampleData.length} sample records and refreshed utilities dropdown.`);
     } catch (error) {
       console.error('❌ Error populating sample data:', error);
       setDebugInfo(`Failed to populate sample data: ${error.message}`);
@@ -476,7 +476,7 @@ export const ResultsViewer: React.FC = () => {
       <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200">
         <div className="flex items-center justify-center">
           <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-3"></div>
-          <span className="text-gray-600">Loading utilities...</span>
+          <span className="text-gray-600">Loading utilities from powersetter table...</span>
         </div>
         {debugInfo && (
           <div className="mt-4 p-3 bg-gray-50 rounded text-sm text-gray-600">
@@ -495,8 +495,8 @@ export const ResultsViewer: React.FC = () => {
           <div className="flex items-center space-x-3">
             <Zap className="w-8 h-8" />
             <div>
-              <h1 className="text-2xl font-bold">Energy Rate Comparison</h1>
-              <p className="text-blue-100">Compare electricity rates from PowerSetter</p>
+              <h1 className="text-2xl font-bold">Energy Rate Analysis</h1>
+              <p className="text-blue-100">Compare electricity rates from PowerSetter database</p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
@@ -509,7 +509,7 @@ export const ResultsViewer: React.FC = () => {
             {connectionStatus === 'connected' && (
               <div className="flex items-center text-green-200">
                 <div className="w-2 h-2 bg-green-300 rounded-full mr-2"></div>
-                <span className="text-sm">Connected</span>
+                <span className="text-sm">Connected to Database</span>
               </div>
             )}
             {connectionStatus === 'error' && (
@@ -525,8 +525,8 @@ export const ResultsViewer: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-blue-100 mb-2">
-              <Zap className="w-4 h-4 inline mr-1" />
-              Utility Company
+              <Building2 className="w-4 h-4 inline mr-1" />
+              Select Utility Company
             </label>
             <select
               value={selectedUtility}
@@ -541,10 +541,10 @@ export const ResultsViewer: React.FC = () => {
               ))}
             </select>
             {utilities.length === 0 && connectionStatus === 'connected' && (
-              <p className="text-xs text-red-200 mt-1">No utilities found in database</p>
+              <p className="text-xs text-red-200 mt-1">No utilities found in powersetter table</p>
             )}
             {utilities.length > 0 && (
-              <p className="text-xs text-blue-200 mt-1">{utilities.length} utilities available</p>
+              <p className="text-xs text-blue-200 mt-1">{utilities.length} utilities available in database</p>
             )}
           </div>
 
@@ -582,7 +582,7 @@ export const ResultsViewer: React.FC = () => {
             <div className="flex-1">
               <h3 className="text-lg font-medium text-red-800 mb-2">Database Permission Issue</h3>
               <p className="text-sm text-red-700 mb-4">
-                Row Level Security (RLS) policies are preventing access to the data. Even though you have data in your database, 
+                Row Level Security (RLS) policies are preventing access to the powersetter table. Even though you have data in your database, 
                 the current policies don't allow the anonymous user to read it.
               </p>
               
@@ -612,7 +612,7 @@ export const ResultsViewer: React.FC = () => {
             <div>
               <h3 className="text-sm font-medium text-red-800">Database Connection Error</h3>
               <p className="text-sm text-red-700 mt-1">
-                Unable to connect to the database. Please check your configuration and try again.
+                Unable to connect to the powersetter table. Please check your configuration and try again.
               </p>
               {debugInfo && (
                 <p className="text-xs text-red-600 mt-2 font-mono">{debugInfo}</p>
@@ -628,53 +628,31 @@ export const ResultsViewer: React.FC = () => {
           <div className="flex items-start">
             <AlertTriangle className="w-6 h-6 text-yellow-600 mr-3 mt-1" />
             <div className="flex-1">
-              <h3 className="text-lg font-medium text-yellow-800 mb-2">No Data Found</h3>
+              <h3 className="text-lg font-medium text-yellow-800 mb-2">No Data Found in PowerSetter Table</h3>
               <p className="text-sm text-yellow-700 mb-4">
-                Your database is connected but the powersetter table is empty. You have two options:
+                Your database is connected but the powersetter table is empty. You can add sample data to test the interface:
               </p>
               
               <div className="space-y-3">
                 <div className="flex items-center space-x-3">
                   <div className="flex-1">
-                    <h4 className="font-medium text-yellow-800">Option 1: Run PowerSetter Scraper</h4>
+                    <h4 className="font-medium text-yellow-800">Add Sample Energy Rate Data</h4>
                     <p className="text-sm text-yellow-600">
-                      Go to the "PowerSetter" tab and run the scraper to collect real data from PowerSetter.com
+                      Add 5 sample energy rate records with realistic supplier logos to test the interface
                     </p>
                   </div>
                   <button
-                    onClick={() => {
-                      // Navigate to PowerSetter tab
-                      const event = new CustomEvent('navigate', { detail: 'powersetter' });
-                      window.dispatchEvent(event);
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                    onClick={populateWithSampleData}
+                    disabled={isPopulating}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                   >
-                    <Play className="w-4 h-4" />
-                    <span>Go to Scraper</span>
+                    {isPopulating ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <Database className="w-4 h-4" />
+                    )}
+                    <span>{isPopulating ? 'Adding...' : 'Add Sample Data'}</span>
                   </button>
-                </div>
-                
-                <div className="border-t border-yellow-200 pt-3">
-                  <div className="flex items-center space-x-3">
-                    <div className="flex-1">
-                      <h4 className="font-medium text-yellow-800">Option 2: Add Sample Data</h4>
-                      <p className="text-sm text-yellow-600">
-                        Add sample energy rate data to test the interface (5 sample records with realistic supplier logos)
-                      </p>
-                    </div>
-                    <button
-                      onClick={populateWithSampleData}
-                      disabled={isPopulating}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                    >
-                      {isPopulating ? (
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      ) : (
-                        <Database className="w-4 h-4" />
-                      )}
-                      <span>{isPopulating ? 'Adding...' : 'Add Sample Data'}</span>
-                    </button>
-                  </div>
                 </div>
               </div>
               
@@ -696,7 +674,7 @@ export const ResultsViewer: React.FC = () => {
             <div>
               <h3 className="text-sm font-medium text-blue-800">Adding Sample Data</h3>
               <p className="text-sm text-blue-700 mt-1">
-                Inserting 5 sample energy rate records with supplier logos and refreshing the interface...
+                Inserting 5 sample energy rate records and refreshing the utilities dropdown...
               </p>
             </div>
           </div>
@@ -706,7 +684,7 @@ export const ResultsViewer: React.FC = () => {
       {/* Results Content */}
       {!selectedUtility ? (
         <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-200 text-center">
-          <Zap className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+          <Building2 className="w-16 h-16 mx-auto mb-4 text-gray-300" />
           <h3 className="text-xl font-semibold text-gray-900 mb-2">Select a Utility to View Rates</h3>
           <p className="text-gray-600">Choose a utility company from the dropdown above to compare energy rates and find the best deals.</p>
           {utilities.length > 0 && (
@@ -726,7 +704,7 @@ export const ResultsViewer: React.FC = () => {
         <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-200 text-center">
           <Database className="w-16 h-16 mx-auto mb-4 text-gray-300" />
           <h3 className="text-xl font-semibold text-gray-900 mb-2">No Data Available</h3>
-          <p className="text-gray-600">No energy rate data found for {selectedUtility}. Try running the scraper to collect data.</p>
+          <p className="text-gray-600">No energy rate data found for {selectedUtility} in the powersetter table.</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

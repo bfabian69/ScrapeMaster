@@ -21,7 +21,7 @@ export const PowerSetterConfig: React.FC<PowerSetterConfigProps> = ({ onStartScr
 
   const checkBackendStatus = async () => {
     try {
-      const response = await fetch('http://localhost:3001/health');
+      const response = await fetch('http://localhost:5000/api/health');
       if (response.ok) {
         setBackendStatus('connected');
       } else {
@@ -66,20 +66,19 @@ export const PowerSetterConfig: React.FC<PowerSetterConfigProps> = ({ onStartScr
           <div className="flex items-start">
             <AlertTriangle className="w-6 h-6 text-red-600 mr-3 mt-1" />
             <div className="flex-1">
-              <h3 className="text-lg font-medium text-red-800 mb-2">Node.js Backend Required</h3>
+              <h3 className="text-lg font-medium text-red-800 mb-2">Python Backend Required</h3>
               <p className="text-sm text-red-700 mb-4">
-                To scrape real data from PowerSetter.com, you need to run the Node.js backend server. 
-                The backend uses Puppeteer and Chrome to extract actual energy rate data.
+                To scrape real data from PowerSetter.com, you need to run the Python backend server. 
+                The backend uses Selenium and Chrome to extract actual energy rate data.
               </p>
               
               <div className="bg-red-100 rounded-lg p-4 mb-4">
                 <h4 className="font-medium text-red-800 mb-2">Setup Instructions:</h4>
                 <ol className="list-decimal list-inside text-sm text-red-700 space-y-1">
                   <li>Open a terminal and navigate to the <code className="bg-red-200 px-1 rounded">backend</code> folder</li>
-                  <li>Install dependencies: <code className="bg-red-200 px-1 rounded">npm install</code></li>
-                  <li>Install Chrome (if not already installed)</li>
-                  <li>Run the backend: <code className="bg-red-200 px-1 rounded">npm run dev</code></li>
-                  <li>Backend should start on port 3001</li>
+                  <li>Install dependencies: <code className="bg-red-200 px-1 rounded">pip install -r requirements.txt</code></li>
+                  <li>Install Chrome and ChromeDriver (see backend/README.md)</li>
+                  <li>Run the backend: <code className="bg-red-200 px-1 rounded">python powersetter_api.py</code></li>
                   <li>Come back and refresh this page</li>
                 </ol>
               </div>
@@ -91,15 +90,15 @@ export const PowerSetterConfig: React.FC<PowerSetterConfigProps> = ({ onStartScr
                 >
                   Check Again
                 </button>
-                <button
-                  onClick={() => {
-                    alert('Navigate to the backend folder and run: npm install && npm run dev');
-                  }}
+                <a
+                  href="https://github.com/your-repo/backend/README.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center space-x-2"
                 >
                   <ExternalLink className="w-4 h-4" />
                   <span>Setup Guide</span>
-                </button>
+                </a>
               </div>
             </div>
           </div>
@@ -120,13 +119,13 @@ export const PowerSetterConfig: React.FC<PowerSetterConfigProps> = ({ onStartScr
                 backendStatus === 'error' ? 'bg-red-500' : 'bg-yellow-500'
               }`}></div>
               <span className="text-gray-600">
-                Backend: {backendStatus === 'connected' ? 'Connected (Port 3001)' : 
+                Backend: {backendStatus === 'connected' ? 'Connected' : 
                          backendStatus === 'error' ? 'Disconnected' : 'Checking...'}
               </span>
             </div>
             <div className="flex items-center space-x-2 text-sm text-gray-500">
               <Database className="w-4 h-4" />
-              <span>Real data via Node.js + Puppeteer</span>
+              <span>Real data via Python + Selenium</span>
             </div>
           </div>
         </div>

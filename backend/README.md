@@ -1,27 +1,45 @@
-# PowerSetter Backend
+# PowerSetter Python Scraper Backend
 
-Backend API service for the PowerSetter application.
+This backend service runs your Python scraping script and provides an API for the React frontend to trigger real PowerSetter.com scraping.
 
 ## Setup
 
-1. Install dependencies:
+1. **Install Python Dependencies**
    ```bash
-   npm install
+   cd backend
+   pip install -r requirements.txt
    ```
 
-2. Copy environment variables:
+2. **Install Chrome and ChromeDriver**
+   ```bash
+   # On Ubuntu/Debian
+   sudo apt-get update
+   sudo apt-get install -y google-chrome-stable
+   
+   # Install ChromeDriver
+   wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/LATEST_RELEASE/chromedriver_linux64.zip
+   sudo unzip /tmp/chromedriver.zip -d /usr/local/bin/
+   sudo chmod +x /usr/local/bin/chromedriver
+   ```
+
+3. **Configure Environment**
    ```bash
    cp .env.example .env
+   # Edit .env with your database credentials
    ```
 
-3. Start the development server:
+4. **Run the Backend**
    ```bash
-   npm run dev
+   python powersetter_api.py
    ```
 
-The server will run on port 3001 by default.
+The API will be available at `http://localhost:5000`
 
-## Endpoints
+## API Endpoints
 
-- `GET /health` - Health check endpoint
-- `GET /api/powersetter` - PowerSetter API endpoint
+- `POST /api/scrape` - Start PowerSetter scraping
+- `GET /api/health` - Health check
+
+## Usage
+
+The React frontend will call this API when you click "Start PowerSetter Scraping".

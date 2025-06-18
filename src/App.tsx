@@ -20,34 +20,16 @@ import {
   Users,
   Smartphone,
   Monitor,
-  TrendingUp,
-  MapPin,
-  Building2,
-  ExternalLink,
-  RefreshCw,
-  DollarSign,
-  Calendar,
-  Leaf,
-  Award,
-  Image
+  TrendingUp
 } from 'lucide-react';
 import { PowerSetterConfig } from './components/PowerSetterConfig';
-import { ResultsViewer } from './components/ResultsViewer';
 import { ScrapedDataViewer } from './components/ScrapedDataViewer';
-
-interface ScrapingJob {
-  id: string;
-  url: string;
-  status: 'running' | 'completed' | 'paused' | 'error';
-  progress: number;
-  itemsScraped: number;
-  startTime: string;
-  dataType?: string;
-  zipCodes?: string[];
-}
+import { ResultsViewer } from './components/ResultsViewer';
+import { PowerSetterScraper } from './services/powersetterScraper';
+import { ScrapingJob, ScrapingConfig } from './types/scraping';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('landing');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [scrapingJobs, setScrapingJobs] = useState<ScrapingJob[]>([
     {
       id: '1',
@@ -63,19 +45,7 @@ function App() {
 
   const [newUrl, setNewUrl] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
-  const [powerSetterScraping, setPowerSetterScraping] = useState(false);
-
-  // Listen for navigation events
-  useEffect(() => {
-    const handleNavigate = (event: any) => {
-      if (event.detail) {
-        setActiveTab(event.detail);
-      }
-    };
-
-    window.addEventListener('navigate', handleNavigate);
-    return () => window.removeEventListener('navigate', handleNavigate);
-  }, []);
+  const [powersetterScraper, setPowersetterScraper] = useState<PowerSetterScraper | null>(null);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -89,6 +59,51 @@ function App() {
     }, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleStartPowersetterScraping = async (config: ScrapingConfig) => {
+    const jobId = Date.now().toString();
+    const newJob: ScrapingJob = {
+      id: jobId,
+      url: 'https://powersetter.com',
+      status: 'running',
+      progress: 0,
+      itemsScraped: 0,
+      startTime: 'Just now',
+      dataType: 'powersetter',
+      zipCodes: config.zipCodes
+    };
+
+    setScrapingJobs(prev => [...prev, newJob]);
+
+    const scraper = new PowerSetterScraper(config, (progress, itemsScraped) => {
+      setScrapingJobs(prev => prev.map(job => 
+        job.id === jobId 
+          ? { ...job, progress, itemsScraped }
+          : job
+      ));
+    });
+
+    setPowersetterScraper(scraper);
+
+    try {
+      const results = await scraper.startScraping();
+      
+      setScrapingJobs(prev => prev.map(job => 
+        job.id === jobId 
+          ? { ...job, status: 'completed', progress: 100 }
+          : job
+      ));
+
+      console.log('Scraping completed:', results);
+    } catch (error) {
+      console.error('Scraping failed:', error);
+      setScrapingJobs(prev => prev.map(job => 
+        job.id === jobId 
+          ? { ...job, status: 'error' }
+          : job
+      ));
+    }
+  };
 
   const handleStartScraping = () => {
     if (newUrl) {
@@ -108,51 +123,6 @@ function App() {
         setIsAnimating(false);
       }, 1000);
     }
-  };
-
-  const handlePowerSetterScraping = async (config: any) => {
-    setPowerSetterScraping(true);
-    
-    // Simulate scraping process
-    const newJob: ScrapingJob = {
-      id: Date.now().toString(),
-      url: 'https://powersetter.com',
-      status: 'running',
-      progress: 0,
-      itemsScraped: 0,
-      startTime: 'Just now',
-      dataType: 'powersetter',
-      zipCodes: config.zipCodes
-    };
-    
-    setScrapingJobs([...scrapingJobs, newJob]);
-    
-    // Simulate progress updates
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += Math.random() * 10;
-      if (progress >= 100) {
-        progress = 100;
-        clearInterval(interval);
-        setPowerSetterScraping(false);
-        
-        setScrapingJobs(jobs => 
-          jobs.map(job => 
-            job.id === newJob.id 
-              ? { ...job, status: 'completed' as const, progress: 100, itemsScraped: config.zipCodes.length * 5 }
-              : job
-          )
-        );
-      } else {
-        setScrapingJobs(jobs => 
-          jobs.map(job => 
-            job.id === newJob.id 
-              ? { ...job, progress, itemsScraped: Math.floor(progress / 20) * config.zipCodes.length }
-              : job
-          )
-        );
-      }
-    }, 1000);
   };
 
   const getStatusColor = (status: string) => {
@@ -506,25 +476,68 @@ function App() {
         )}
 
         {activeTab === 'powersetter' && (
-          <PowerSetterConfig 
-            onStartScraping={handlePowerSetterScraping}
-            isRunning={powerSetterScraping}
-          />
+          <div className="space-y-8">
+            <PowerSetterConfig 
+              onStartScraping={handleStartPowersetterScraping}
+              isRunning={scrapingJobs.some(job => job.status === 'running' && job.dataType === 'powersetter')}
+            />
+          </div>
         )}
 
         {activeTab === 'results' && (
-          <ResultsViewer />
+          <div className="space-y-8">
+            <ResultsViewer />
+          </div>
         )}
 
         {activeTab === 'data' && (
-          <ScrapedDataViewer />
+          <div className="space-y-8">
+            <ScrapedDataViewer />
+          </div>
         )}
 
         {activeTab === 'settings' && (
-          <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-200 text-center">
-            <Settings className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">Settings</h3>
-            <p className="text-gray-600">Configure your scraping preferences and account settings.</p>
+          <div className="space-y-8">
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+              <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
+                <Settings className="w-6 h-6 text-gray-600 mr-2" />
+                Settings
+              </h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Default Export Format
+                    </label>
+                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                      <option>CSV</option>
+                      <option>JSON</option>
+                      <option>Excel</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Concurrent Jobs Limit
+                    </label>
+                    <input type="number" defaultValue="3" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                </div>
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Default Delay Between Requests (ms)
+                    </label>
+                    <input type="number" defaultValue="5000" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input type="checkbox" id="notifications" className="rounded" />
+                    <label htmlFor="notifications" className="text-sm font-medium text-gray-700">
+                      Email notifications for completed jobs
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

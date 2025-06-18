@@ -1,29 +1,56 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Download, Filter, Search, ExternalLink, Zap, DollarSign, Calendar, Leaf, RefreshCw } from 'lucide-react';
+import { Database, Download, Filter, Search, ExternalLink, Zap, DollarSign, Calendar, Leaf, RefreshCw, Table, Building2 } from 'lucide-react';
 import { PowerSetterData } from '../types/scraping';
-import { getPowerSetterData, supabase } from '../services/supabase';
+import { getEnergyData, getUtilitiesFromTable, supabase, getAvailableTables } from '../services/supabase';
 
 export const ScrapedDataViewer: React.FC = () => {
   const [data, setData] = useState<PowerSetterData[]>([]);
   const [filteredData, setFilteredData] = useState<PowerSetterData[]>([]);
+  const [availableTables, setAvailableTables] = useState<string[]>([]);
+  const [selectedTable, setSelectedTable] = useState('powersetter');
   const [loading, setLoading] = useState(true);
+  const [tablesLoading, setTablesLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUtility, setSelectedUtility] = useState('');
   const [greenOnly, setGreenOnly] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
 
   useEffect(() => {
-    checkConnection();
-    loadData();
+    loadAvailableTables();
   }, []);
+
+  useEffect(() => {
+    if (selectedTable) {
+      checkConnection();
+      loadData();
+    }
+  }, [selectedTable]);
 
   useEffect(() => {
     filterData();
   }, [data, searchTerm, selectedUtility, greenOnly]);
 
+  const loadAvailableTables = async () => {
+    try {
+      setTablesLoading(true);
+      const tables = await getAvailableTables();
+      setAvailableTables(tables);
+      
+      // Set default table if current selection is not available
+      if (tables.length > 0 && !tables.includes(selectedTable)) {
+        setSelectedTable(tables[0]);
+      }
+    } catch (error) {
+      console.error('Error loading available tables:', error);
+      setAvailableTables(['powersetter']); // Fallback to powersetter
+    } finally {
+      setTablesLoading(false);
+    }
+  };
+
   const checkConnection = async () => {
     try {
-      const { data, error } = await supabase.from('powersetter').select('count', { count: 'exact', head: true });
+      const { data, error } = await supabase.from(selectedTable).select('count', { count: 'exact', head: true });
       if (error) {
         console.error('Connection error:', error);
         setConnectionStatus('error');
@@ -39,7 +66,7 @@ export const ScrapedDataViewer: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const scrapedData = await getPowerSetterData();
+      const scrapedData = await getEnergyData(selectedTable);
       setData(scrapedData || []);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -90,19 +117,30 @@ export const ScrapedDataViewer: React.FC = () => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `powersetter_data_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `${selectedTable}_data_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
 
+  const getTableDisplayName = (tableName: string) => {
+    switch (tableName) {
+      case 'powersetter': return 'PowerSetter';
+      case 'chooseenergy': return 'ChooseEnergy';
+      case 'electricityrates': return 'ElectricityRates';
+      default: return tableName;
+    }
+  };
+
   const uniqueUtilities = [...new Set(data.map(item => item.utility))].sort();
 
-  if (loading) {
+  if (loading || tablesLoading) {
     return (
       <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200">
         <div className="flex items-center justify-center">
           <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-3"></div>
-          <span className="text-gray-600">Loading scraped data...</span>
+          <span className="text-gray-600">
+            {tablesLoading ? 'Loading available tables...' : `Loading data from ${selectedTable}...`}
+          </span>
         </div>
       </div>
     );
@@ -114,7 +152,7 @@ export const ScrapedDataViewer: React.FC = () => {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-gray-900 flex items-center">
             <Database className="w-6 h-6 text-green-600 mr-2" />
-            Scraped PowerSetter Data
+            Raw Energy Data
             <div className="ml-4 flex items-center">
               {connectionStatus === 'checking' && (
                 <div className="flex items-center text-yellow-600">
@@ -125,7 +163,7 @@ export const ScrapedDataViewer: React.FC = () => {
               {connectionStatus === 'connected' && (
                 <div className="flex items-center text-green-600">
                   <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
-                  <span className="text-sm">Connected to Supabase</span>
+                  <span className="text-sm">Connected to Database</span>
                 </div>
               )}
               {connectionStatus === 'error' && (
@@ -163,7 +201,7 @@ export const ScrapedDataViewer: React.FC = () => {
               <div>
                 <h3 className="text-sm font-medium text-red-800">Database Connection Error</h3>
                 <p className="text-sm text-red-700 mt-1">
-                  Unable to connect to Supabase. Please check your environment variables and database setup.
+                  Unable to connect to the {selectedTable} table. Please check your database setup.
                 </p>
               </div>
             </div>
@@ -171,9 +209,28 @@ export const ScrapedDataViewer: React.FC = () => {
         )}
 
         {/* Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              <Table className="w-4 h-4 inline mr-1" />
+              Data Source
+            </label>
+            <select
+              value={selectedTable}
+              onChange={(e) => setSelectedTable(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              {availableTables.map(table => (
+                <option key={table} value={table}>
+                  {getTableDisplayName(table)}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="relative">
-            <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+            <Search className="absolute left-3 top-9 w-4 h-4 text-gray-400" />
             <input
               type="text"
               placeholder="Search ZIP or utility..."
@@ -183,33 +240,43 @@ export const ScrapedDataViewer: React.FC = () => {
             />
           </div>
 
-          <select
-            value={selectedUtility}
-            onChange={(e) => setSelectedUtility(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">All Utilities</option>
-            {uniqueUtilities.map(utility => (
-              <option key={utility} value={utility}>{utility}</option>
-            ))}
-          </select>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              <Building2 className="w-4 h-4 inline mr-1" />
+              Utility
+            </label>
+            <select
+              value={selectedUtility}
+              onChange={(e) => setSelectedUtility(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">All Utilities</option>
+              {uniqueUtilities.map(utility => (
+                <option key={utility} value={utility}>{utility}</option>
+              ))}
+            </select>
+          </div>
 
-          <label className="flex items-center space-x-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={greenOnly}
-              onChange={(e) => setGreenOnly(e.target.checked)}
-              className="rounded border-gray-300 text-green-600 focus:ring-green-500"
-            />
-            <span className="text-sm font-medium text-gray-700 flex items-center">
-              <Leaf className="w-4 h-4 mr-1 text-green-600" />
-              Green Only
-            </span>
-          </label>
+          <div className="flex items-end">
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={greenOnly}
+                onChange={(e) => setGreenOnly(e.target.checked)}
+                className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+              />
+              <span className="text-sm font-medium text-gray-700 flex items-center">
+                <Leaf className="w-4 h-4 mr-1 text-green-600" />
+                Green Only
+              </span>
+            </label>
+          </div>
 
-          <div className="text-sm text-gray-600 flex items-center">
-            <Filter className="w-4 h-4 mr-1" />
-            {filteredData.length} of {data.length} records
+          <div className="flex items-end">
+            <div className="text-sm text-gray-600 flex items-center">
+              <Filter className="w-4 h-4 mr-1" />
+              {filteredData.length} of {data.length} records
+            </div>
           </div>
         </div>
       </div>
@@ -219,13 +286,13 @@ export const ScrapedDataViewer: React.FC = () => {
           <div className="text-center py-8 text-gray-500">
             <Database className="w-12 h-12 mx-auto mb-4 text-red-300" />
             <p className="text-red-600 font-medium">Database Connection Failed</p>
-            <p className="text-sm text-gray-500 mt-2">Please check your Supabase configuration</p>
+            <p className="text-sm text-gray-500 mt-2">Please check your database configuration for {selectedTable}</p>
           </div>
         ) : filteredData.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <Database className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-            <p>No data found matching your filters.</p>
-            <p className="text-sm text-gray-400 mt-2">Try running the PowerSetter scraper to collect data.</p>
+            <p>No data found matching your filters in {getTableDisplayName(selectedTable)}.</p>
+            <p className="text-sm text-gray-400 mt-2">Try adjusting your filters or selecting a different data source.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -239,6 +306,7 @@ export const ScrapedDataViewer: React.FC = () => {
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">Terms</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">Green</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">Fee</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Scraped</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">Actions</th>
                 </tr>
               </thead>
@@ -275,6 +343,9 @@ export const ScrapedDataViewer: React.FC = () => {
                       )}
                     </td>
                     <td className="py-3 px-4 text-gray-700">{item.fee || 'No fee'}</td>
+                    <td className="py-3 px-4 text-gray-500 text-sm">
+                      {new Date(item.scraped_at).toLocaleDateString()}
+                    </td>
                     <td className="py-3 px-4">
                       {item.signup_url && (
                         <a

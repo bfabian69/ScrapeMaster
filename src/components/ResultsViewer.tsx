@@ -20,10 +20,19 @@ import {
   CheckCircle,
   Shield,
   XCircle,
-  Image
+  Image,
+  Table
 } from 'lucide-react';
 import { PowerSetterData } from '../types/scraping';
-import { getPowerSetterData, getUtilities, getPTCData, testConnection, insertPowerSetterData, checkDatabasePermissions } from '../services/supabase';
+import { 
+  getEnergyData, 
+  getUtilitiesFromTable, 
+  getPTCData, 
+  testTableConnection, 
+  insertPowerSetterData, 
+  checkTablePermissions,
+  getAvailableTables
+} from '../services/supabase';
 
 interface GroupedRates {
   [utility: string]: {
@@ -39,9 +48,12 @@ export const ResultsViewer: React.FC = () => {
   const [data, setData] = useState<PowerSetterData[]>([]);
   const [groupedRates, setGroupedRates] = useState<GroupedRates>({});
   const [utilities, setUtilities] = useState<string[]>([]);
+  const [availableTables, setAvailableTables] = useState<string[]>([]);
+  const [selectedTable, setSelectedTable] = useState('powersetter');
   const [ptcData, setPtcData] = useState<PTCData>({});
   const [loading, setLoading] = useState(false);
   const [utilitiesLoading, setUtilitiesLoading] = useState(true);
+  const [tablesLoading, setTablesLoading] = useState(true);
   const [selectedUtility, setSelectedUtility] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
@@ -56,13 +68,22 @@ export const ResultsViewer: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (selectedUtility) {
-      console.log('Selected utility changed to:', selectedUtility);
+    if (selectedTable) {
+      console.log('Selected table changed to:', selectedTable);
+      loadUtilitiesForTable();
+      setSelectedUtility(''); // Reset utility selection when table changes
+      setGroupedRates({});
+    }
+  }, [selectedTable]);
+
+  useEffect(() => {
+    if (selectedUtility && selectedTable) {
+      console.log('Selected utility changed to:', selectedUtility, 'for table:', selectedTable);
       loadRatesData();
     } else {
       setGroupedRates({});
     }
-  }, [selectedUtility]);
+  }, [selectedUtility, selectedTable]);
 
   const initializeData = async () => {
     console.log('=== Initializing ResultsViewer Data ===');
@@ -70,19 +91,23 @@ export const ResultsViewer: React.FC = () => {
     setIsRLSIssue(false);
     
     try {
-      // Step 1: Test connection
-      setDebugInfo('Testing database connection to powersetter table...');
+      // Step 1: Load available tables
+      setDebugInfo('Loading available tables...');
+      await loadAvailableTables();
+      
+      // Step 2: Test connection to default table
+      setDebugInfo('Testing database connection...');
       await checkConnection();
       
-      // Step 2: Check permissions
+      // Step 3: Check permissions
       setDebugInfo('Checking database permissions...');
       await checkPermissions();
       
-      // Step 3: Load utilities
-      setDebugInfo('Loading utilities from powersetter table...');
-      await loadUtilities();
+      // Step 4: Load utilities for default table
+      setDebugInfo('Loading utilities...');
+      await loadUtilitiesForTable();
       
-      // Step 4: Load PTC data
+      // Step 5: Load PTC data
       setDebugInfo('Loading PTC data...');
       await loadPTCData();
       
@@ -93,18 +118,43 @@ export const ResultsViewer: React.FC = () => {
     }
   };
 
+  const loadAvailableTables = async () => {
+    try {
+      console.log('=== Loading Available Tables ===');
+      setTablesLoading(true);
+      
+      const tables = await getAvailableTables();
+      console.log('Available tables:', tables);
+      
+      setAvailableTables(tables);
+      
+      // Set default table if current selection is not available
+      if (tables.length > 0 && !tables.includes(selectedTable)) {
+        setSelectedTable(tables[0]);
+      }
+      
+      setDebugInfo(`Found ${tables.length} available tables: ${tables.join(', ')}`);
+    } catch (error) {
+      console.error('Error loading available tables:', error);
+      setAvailableTables(['powersetter']); // Fallback to powersetter
+      setDebugInfo(`Failed to load tables, using default: ${error.message}`);
+    } finally {
+      setTablesLoading(false);
+    }
+  };
+
   const checkConnection = async () => {
     try {
       console.log('=== Testing Database Connection ===');
       setConnectionStatus('checking');
       
-      const result = await testConnection();
+      const result = await testTableConnection(selectedTable);
       console.log('Connection test result:', result);
       
       if (result.success) {
         console.log('✅ Database connection successful');
         setConnectionStatus('connected');
-        setDebugInfo(`Connected successfully. Found ${result.recordCount || 0} records in powersetter table.`);
+        setDebugInfo(`Connected successfully to ${selectedTable} table. Found ${result.recordCount || 0} records.`);
       } else {
         console.error('❌ Database connection failed:', result.error);
         setConnectionStatus('error');
@@ -124,12 +174,12 @@ export const ResultsViewer: React.FC = () => {
   const checkPermissions = async () => {
     try {
       console.log('=== Checking Database Permissions ===');
-      const perms = await checkDatabasePermissions();
+      const perms = await checkTablePermissions(selectedTable);
       setPermissions(perms);
       
       if (perms) {
         console.log('Permissions check result:', perms);
-        if (!perms.insert) {
+        if (!perms.insert && selectedTable === 'powersetter') {
           setDebugInfo('Warning: No INSERT permission detected. Sample data insertion may fail.');
         }
       }
@@ -138,48 +188,50 @@ export const ResultsViewer: React.FC = () => {
     }
   };
 
-  const loadUtilities = async () => {
+  const loadUtilitiesForTable = async () => {
+    if (!selectedTable) return;
+    
     try {
-      console.log('=== Loading Utilities from PowerSetter Table ===');
+      console.log(`=== Loading Utilities from ${selectedTable} Table ===`);
       setUtilitiesLoading(true);
       
-      const utilitiesList = await getUtilities();
+      const utilitiesList = await getUtilitiesFromTable(selectedTable);
       console.log('✅ Utilities loaded successfully:', utilitiesList);
       
       setUtilities(utilitiesList);
       
       if (utilitiesList.length === 0) {
-        console.warn('⚠️ No utilities found in powersetter table');
-        setDebugInfo('No utilities found in powersetter table. The table may be empty or have no utility data.');
+        console.warn(`⚠️ No utilities found in ${selectedTable} table`);
+        setDebugInfo(`No utilities found in ${selectedTable} table. The table may be empty or have no utility data.`);
         
         // Get sample data for debugging
         try {
-          const sampleData = await getPowerSetterData();
+          const sampleData = await getEnergyData(selectedTable);
           console.log('Sample data for debugging:', sampleData.slice(0, 3));
           
           if (sampleData.length > 0) {
             const utilitiesInData = [...new Set(sampleData.map(d => d.utility).filter(u => u))];
             console.log('Utilities found in sample data:', utilitiesInData);
-            setDebugInfo(`Found ${sampleData.length} total records, but utilities extraction failed. Sample utilities: ${utilitiesInData.join(', ')}`);
+            setDebugInfo(`Found ${sampleData.length} total records in ${selectedTable}, but utilities extraction failed. Sample utilities: ${utilitiesInData.join(', ')}`);
           } else {
-            setDebugInfo('No data found in powersetter table. Please add some data first.');
+            setDebugInfo(`No data found in ${selectedTable} table. Please add some data first.`);
           }
         } catch (sampleError) {
           console.error('Failed to get sample data:', sampleError);
-          setDebugInfo(`Failed to get sample data: ${sampleError.message}`);
+          setDebugInfo(`Failed to get sample data from ${selectedTable}: ${sampleError.message}`);
           
           if (sampleError.message.includes('Row Level Security')) {
             setIsRLSIssue(true);
           }
         }
       } else {
-        setDebugInfo(`Successfully loaded ${utilitiesList.length} utilities from powersetter table: ${utilitiesList.join(', ')}`);
+        setDebugInfo(`Successfully loaded ${utilitiesList.length} utilities from ${selectedTable} table: ${utilitiesList.join(', ')}`);
       }
     } catch (error) {
-      console.error('❌ Error loading utilities:', error);
+      console.error(`❌ Error loading utilities from ${selectedTable}:`, error);
       setUtilities([]);
       setConnectionStatus('error');
-      setDebugInfo(`Failed to load utilities: ${error.message}`);
+      setDebugInfo(`Failed to load utilities from ${selectedTable}: ${error.message}`);
       
       if (error.message.includes('Row Level Security')) {
         setIsRLSIssue(true);
@@ -202,17 +254,17 @@ export const ResultsViewer: React.FC = () => {
   };
 
   const loadRatesData = async () => {
-    if (!selectedUtility) return;
+    if (!selectedUtility || !selectedTable) return;
     
     try {
       console.log('=== Loading Rates Data ===');
-      console.log('Loading rates data for utility:', selectedUtility);
+      console.log('Loading rates data for utility:', selectedUtility, 'from table:', selectedTable);
       setLoading(true);
-      const ratesData = await getPowerSetterData();
+      const ratesData = await getEnergyData(selectedTable);
       
       // Filter by utility
       const filteredData = ratesData.filter(rate => rate.utility === selectedUtility);
-      console.log('Filtered data for', selectedUtility, ':', filteredData.length, 'records');
+      console.log('Filtered data for', selectedUtility, 'from', selectedTable, ':', filteredData.length, 'records');
       setData(filteredData);
       
       // Group by utility and date (matching Flask app logic)
@@ -363,7 +415,7 @@ export const ResultsViewer: React.FC = () => {
       
       // Reload everything
       await checkConnection();
-      await loadUtilities();
+      await loadUtilitiesForTable();
       await loadPTCData();
       
       setDebugInfo(`Successfully added ${sampleData.length} sample records and refreshed utilities dropdown.`);
@@ -403,7 +455,7 @@ export const ResultsViewer: React.FC = () => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `energy_rates_${selectedUtility.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `energy_rates_${selectedTable}_${selectedUtility.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -471,12 +523,23 @@ export const ResultsViewer: React.FC = () => {
     );
   };
 
-  if (utilitiesLoading) {
+  const getTableDisplayName = (tableName: string) => {
+    switch (tableName) {
+      case 'powersetter': return 'PowerSetter';
+      case 'chooseenergy': return 'ChooseEnergy';
+      case 'electricityrates': return 'ElectricityRates';
+      default: return tableName;
+    }
+  };
+
+  if (utilitiesLoading || tablesLoading) {
     return (
       <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200">
         <div className="flex items-center justify-center">
           <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-3"></div>
-          <span className="text-gray-600">Loading utilities from powersetter table...</span>
+          <span className="text-gray-600">
+            {tablesLoading ? 'Loading available tables...' : `Loading utilities from ${selectedTable} table...`}
+          </span>
         </div>
         {debugInfo && (
           <div className="mt-4 p-3 bg-gray-50 rounded text-sm text-gray-600">
@@ -496,7 +559,7 @@ export const ResultsViewer: React.FC = () => {
             <Zap className="w-8 h-8" />
             <div>
               <h1 className="text-2xl font-bold">Energy Rate Analysis</h1>
-              <p className="text-blue-100">Compare electricity rates from PowerSetter database</p>
+              <p className="text-blue-100">Compare electricity rates across multiple data sources</p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
@@ -522,7 +585,31 @@ export const ResultsViewer: React.FC = () => {
         </div>
 
         {/* Filter Controls */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-blue-100 mb-2">
+              <Table className="w-4 h-4 inline mr-1" />
+              Data Source
+            </label>
+            <select
+              value={selectedTable}
+              onChange={(e) => setSelectedTable(e.target.value)}
+              className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/60 focus:ring-2 focus:ring-white/30 focus:border-transparent backdrop-blur-sm"
+            >
+              {availableTables.map(table => (
+                <option key={table} value={table} className="text-gray-900">
+                  {getTableDisplayName(table)}
+                </option>
+              ))}
+            </select>
+            {availableTables.length === 0 && (
+              <p className="text-xs text-red-200 mt-1">No tables available</p>
+            )}
+            {availableTables.length > 0 && (
+              <p className="text-xs text-blue-200 mt-1">{availableTables.length} data sources available</p>
+            )}
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-blue-100 mb-2">
               <Building2 className="w-4 h-4 inline mr-1" />
@@ -541,10 +628,10 @@ export const ResultsViewer: React.FC = () => {
               ))}
             </select>
             {utilities.length === 0 && connectionStatus === 'connected' && (
-              <p className="text-xs text-red-200 mt-1">No utilities found in powersetter table</p>
+              <p className="text-xs text-red-200 mt-1">No utilities found in {selectedTable} table</p>
             )}
             {utilities.length > 0 && (
-              <p className="text-xs text-blue-200 mt-1">{utilities.length} utilities available in database</p>
+              <p className="text-xs text-blue-200 mt-1">{utilities.length} utilities available in {getTableDisplayName(selectedTable)}</p>
             )}
           </div>
 
@@ -582,7 +669,7 @@ export const ResultsViewer: React.FC = () => {
             <div className="flex-1">
               <h3 className="text-lg font-medium text-red-800 mb-2">Database Permission Issue</h3>
               <p className="text-sm text-red-700 mb-4">
-                Row Level Security (RLS) policies are preventing access to the powersetter table. Even though you have data in your database, 
+                Row Level Security (RLS) policies are preventing access to the {selectedTable} table. Even though you have data in your database, 
                 the current policies don't allow the anonymous user to read it.
               </p>
               
@@ -612,7 +699,7 @@ export const ResultsViewer: React.FC = () => {
             <div>
               <h3 className="text-sm font-medium text-red-800">Database Connection Error</h3>
               <p className="text-sm text-red-700 mt-1">
-                Unable to connect to the powersetter table. Please check your configuration and try again.
+                Unable to connect to the {selectedTable} table. Please check your configuration and try again.
               </p>
               {debugInfo && (
                 <p className="text-xs text-red-600 mt-2 font-mono">{debugInfo}</p>
@@ -623,14 +710,14 @@ export const ResultsViewer: React.FC = () => {
       )}
 
       {/* Empty Database Alert with Sample Data Option */}
-      {connectionStatus === 'connected' && utilities.length === 0 && !isPopulating && !isRLSIssue && (
+      {connectionStatus === 'connected' && utilities.length === 0 && !isPopulating && !isRLSIssue && selectedTable === 'powersetter' && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
           <div className="flex items-start">
             <AlertTriangle className="w-6 h-6 text-yellow-600 mr-3 mt-1" />
             <div className="flex-1">
-              <h3 className="text-lg font-medium text-yellow-800 mb-2">No Data Found in PowerSetter Table</h3>
+              <h3 className="text-lg font-medium text-yellow-800 mb-2">No Data Found in {getTableDisplayName(selectedTable)} Table</h3>
               <p className="text-sm text-yellow-700 mb-4">
-                Your database is connected but the powersetter table is empty. You can add sample data to test the interface:
+                Your database is connected but the {selectedTable} table is empty. You can add sample data to test the interface:
               </p>
               
               <div className="space-y-3">
@@ -666,6 +753,27 @@ export const ResultsViewer: React.FC = () => {
         </div>
       )}
 
+      {/* Empty Database Alert for other tables */}
+      {connectionStatus === 'connected' && utilities.length === 0 && !isRLSIssue && selectedTable !== 'powersetter' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <div className="flex items-start">
+            <Database className="w-6 h-6 text-blue-600 mr-3 mt-1" />
+            <div className="flex-1">
+              <h3 className="text-lg font-medium text-blue-800 mb-2">No Data Found in {getTableDisplayName(selectedTable)} Table</h3>
+              <p className="text-sm text-blue-700 mb-4">
+                The {selectedTable} table is empty or doesn't contain utility data. Try selecting a different data source or add data to this table.
+              </p>
+              
+              {debugInfo && (
+                <div className="mt-4 p-3 bg-blue-100 rounded text-xs text-blue-700 font-mono">
+                  Debug: {debugInfo}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Loading State for Sample Data Population */}
       {isPopulating && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
@@ -689,7 +797,7 @@ export const ResultsViewer: React.FC = () => {
           <p className="text-gray-600">Choose a utility company from the dropdown above to compare energy rates and find the best deals.</p>
           {utilities.length > 0 && (
             <p className="text-sm text-gray-500 mt-2">
-              {utilities.length} utilities available: {utilities.slice(0, 3).join(', ')}{utilities.length > 3 ? '...' : ''}
+              {utilities.length} utilities available in {getTableDisplayName(selectedTable)}: {utilities.slice(0, 3).join(', ')}{utilities.length > 3 ? '...' : ''}
             </p>
           )}
         </div>
@@ -697,14 +805,14 @@ export const ResultsViewer: React.FC = () => {
         <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-200">
           <div className="flex items-center justify-center">
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-3"></div>
-            <span className="text-gray-600">Loading energy rates for {selectedUtility}...</span>
+            <span className="text-gray-600">Loading energy rates for {selectedUtility} from {getTableDisplayName(selectedTable)}...</span>
           </div>
         </div>
       ) : Object.keys(groupedRates).length === 0 ? (
         <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-200 text-center">
           <Database className="w-16 h-16 mx-auto mb-4 text-gray-300" />
           <h3 className="text-xl font-semibold text-gray-900 mb-2">No Data Available</h3>
-          <p className="text-gray-600">No energy rate data found for {selectedUtility} in the powersetter table.</p>
+          <p className="text-gray-600">No energy rate data found for {selectedUtility} in the {getTableDisplayName(selectedTable)} table.</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -718,6 +826,10 @@ export const ResultsViewer: React.FC = () => {
                     <div>
                       <h2 className="text-xl font-bold text-gray-900">{utility}</h2>
                       <div className="flex items-center space-x-4 mt-1">
+                        <div className="flex items-center text-sm text-gray-600">
+                          <Table className="w-4 h-4 mr-1" />
+                          <span>Source: {getTableDisplayName(selectedTable)}</span>
+                        </div>
                         {ptcData[utility] && (
                           <div className="flex items-center text-sm text-gray-600">
                             <TrendingDown className="w-4 h-4 mr-1" />

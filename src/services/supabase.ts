@@ -17,13 +17,14 @@ if (!supabaseUrl || !supabaseKey) {
 
 export const supabase = createClient(supabaseUrl || '', supabaseKey || '');
 
-export const getPowerSetterData = async (zipCode?: string): Promise<PowerSetterData[]> => {
+// Generic function to get data from any table
+export const getEnergyData = async (tableName: string, zipCode?: string): Promise<PowerSetterData[]> => {
   try {
-    console.log('=== getPowerSetterData called ===');
-    console.log('Querying powersetter table with zipCode:', zipCode);
+    console.log(`=== getEnergyData called for table: ${tableName} ===`);
+    console.log('Querying table with zipCode:', zipCode);
     
     let query = supabase
-      .from('powersetter')
+      .from(tableName)
       .select('*')
       .order('scraped_at', { ascending: false });
     
@@ -31,11 +32,11 @@ export const getPowerSetterData = async (zipCode?: string): Promise<PowerSetterD
       query = query.eq('zip_code', zipCode);
     }
     
-    console.log('Executing query on powersetter table...');
+    console.log(`Executing query on ${tableName} table...`);
     const { data, error } = await query;
     
     if (error) {
-      console.error('Error fetching PowerSetter data from powersetter table:', error);
+      console.error(`Error fetching data from ${tableName} table:`, error);
       console.error('Error details:', {
         message: error.message,
         details: error.details,
@@ -45,38 +46,44 @@ export const getPowerSetterData = async (zipCode?: string): Promise<PowerSetterD
       
       // Check if this is an RLS policy issue
       if (error.code === 'PGRST116' || error.message.includes('row-level security')) {
-        throw new Error('Database access denied. This may be due to Row Level Security policies. Please check your database permissions.');
+        throw new Error(`Database access denied for ${tableName} table. This may be due to Row Level Security policies. Please check your database permissions.`);
       }
       
       throw error;
     }
     
-    console.log('PowerSetter data query result:', {
+    console.log(`${tableName} data query result:`, {
       recordCount: data?.length || 0,
       sampleRecord: data?.[0] || null
     });
     
     return data || [];
   } catch (error) {
-    console.error('Supabase query failed:', error);
+    console.error(`Supabase query failed for ${tableName}:`, error);
     throw error;
   }
 };
 
-export const getUtilities = async (): Promise<string[]> => {
+// Backward compatibility function
+export const getPowerSetterData = async (zipCode?: string): Promise<PowerSetterData[]> => {
+  return getEnergyData('powersetter', zipCode);
+};
+
+// Generic function to get utilities from any table
+export const getUtilitiesFromTable = async (tableName: string): Promise<string[]> => {
   try {
-    console.log('=== Starting getUtilities function ===');
-    console.log('Querying powersetter table for utilities...');
+    console.log(`=== Starting getUtilities function for ${tableName} ===`);
+    console.log(`Querying ${tableName} table for utilities...`);
     
     // First, let's check if we can connect to the table at all
-    console.log('Step 1: Testing basic table access...');
+    console.log(`Step 1: Testing basic table access for ${tableName}...`);
     const { data: testData, error: testError } = await supabase
-      .from('powersetter')
+      .from(tableName)
       .select('*')
       .limit(5);
     
     if (testError) {
-      console.error('Basic table access failed:', testError);
+      console.error(`Basic table access failed for ${tableName}:`, testError);
       console.error('Error details:', {
         message: testError.message,
         details: testError.details,
@@ -86,39 +93,39 @@ export const getUtilities = async (): Promise<string[]> => {
       
       // Check if this is an RLS policy issue
       if (testError.code === 'PGRST116' || testError.message.includes('row-level security')) {
-        throw new Error('Database access denied due to Row Level Security policies. Please run the database migration to fix permissions.');
+        throw new Error(`Database access denied due to Row Level Security policies for ${tableName} table. Please run the database migration to fix permissions.`);
       }
       
       throw testError;
     }
     
-    console.log('Step 1 SUCCESS: Basic table access works');
-    console.log('Sample records from powersetter table:', testData);
+    console.log(`Step 1 SUCCESS: Basic table access works for ${tableName}`);
+    console.log(`Sample records from ${tableName} table:`, testData);
     
     // Now let's specifically query for utilities
-    console.log('Step 2: Querying for utility column...');
+    console.log(`Step 2: Querying for utility column in ${tableName}...`);
     const { data, error } = await supabase
-      .from('powersetter')
+      .from(tableName)
       .select('utility')
       .not('utility', 'is', null)
       .limit(1000);
     
     if (error) {
-      console.error('Utility query failed:', error);
+      console.error(`Utility query failed for ${tableName}:`, error);
       throw error;
     }
     
-    console.log('Step 2 SUCCESS: Utility query completed');
+    console.log(`Step 2 SUCCESS: Utility query completed for ${tableName}`);
     console.log('Raw utility data:', data);
     console.log('Number of records returned:', data?.length || 0);
     
     if (!data || data.length === 0) {
-      console.warn('No records returned from utility query');
+      console.warn(`No records returned from utility query for ${tableName}`);
       return [];
     }
     
     // Let's examine the actual utility values
-    console.log('Step 3: Processing utility values...');
+    console.log(`Step 3: Processing utility values for ${tableName}...`);
     const allUtilities = data.map(row => row.utility);
     console.log('All utility values (including nulls/empty):', allUtilities);
     
@@ -135,14 +142,19 @@ export const getUtilities = async (): Promise<string[]> => {
     console.log('Unique utilities:', uniqueUtilities);
     console.log('Final count:', uniqueUtilities.length);
     
-    console.log('=== getUtilities function completed ===');
+    console.log(`=== getUtilities function completed for ${tableName} ===`);
     return uniqueUtilities;
     
   } catch (error) {
-    console.error('=== getUtilities function FAILED ===');
+    console.error(`=== getUtilities function FAILED for ${tableName} ===`);
     console.error('Error details:', error);
     throw error;
   }
+};
+
+// Backward compatibility function
+export const getUtilities = async (): Promise<string[]> => {
+  return getUtilitiesFromTable('powersetter');
 };
 
 export const getPTCData = async (): Promise<{ [utility: string]: number }> => {
@@ -297,19 +309,19 @@ export const deletePowerSetterData = async (zipCode?: string) => {
   }
 };
 
-// Test connection function
-export const testConnection = async () => {
+// Test connection function for any table
+export const testTableConnection = async (tableName: string) => {
   try {
-    console.log('=== Testing Supabase connection to powersetter table ===');
+    console.log(`=== Testing Supabase connection to ${tableName} table ===`);
     console.log('Supabase URL:', supabaseUrl);
     console.log('Supabase Key:', supabaseKey ? 'Present' : 'Missing');
     
     const { data, error, count } = await supabase
-      .from('powersetter')
+      .from(tableName)
       .select('*', { count: 'exact', head: true });
     
     if (error) {
-      console.error('Connection test failed:', error);
+      console.error(`Connection test failed for ${tableName}:`, error);
       console.error('Error details:', {
         message: error.message,
         details: error.details,
@@ -320,7 +332,7 @@ export const testConnection = async () => {
       if (error.code === 'PGRST116' || error.message.includes('row-level security')) {
         return { 
           success: false, 
-          error: 'Row Level Security policies are blocking data access. Please run the database migration to fix permissions.',
+          error: `Row Level Security policies are blocking data access to ${tableName} table. Please run the database migration to fix permissions.`,
           isRLSIssue: true
         };
       }
@@ -328,16 +340,16 @@ export const testConnection = async () => {
       throw error;
     }
     
-    console.log('Connection test successful');
-    console.log('Total records in powersetter table:', count);
+    console.log(`Connection test successful for ${tableName}`);
+    console.log(`Total records in ${tableName} table:`, count);
     
     return { 
       success: true, 
-      message: 'Connected successfully to powersetter table',
+      message: `Connected successfully to ${tableName} table`,
       recordCount: count 
     };
   } catch (error) {
-    console.error('Connection test error:', error);
+    console.error(`Connection test error for ${tableName}:`, error);
     return { 
       success: false, 
       error: error.message || 'Unknown error' 
@@ -345,10 +357,15 @@ export const testConnection = async () => {
   }
 };
 
-// Check database permissions
-export const checkDatabasePermissions = async () => {
+// Backward compatibility function
+export const testConnection = async () => {
+  return testTableConnection('powersetter');
+};
+
+// Check database permissions for any table
+export const checkTablePermissions = async (tableName: string) => {
   try {
-    console.log('=== Checking Database Permissions for powersetter table ===');
+    console.log(`=== Checking Database Permissions for ${tableName} table ===`);
     
     const permissions = {
       select: false,
@@ -359,53 +376,79 @@ export const checkDatabasePermissions = async () => {
     
     // Test SELECT
     try {
-      await supabase.from('powersetter').select('*').limit(1);
+      await supabase.from(tableName).select('*').limit(1);
       permissions.select = true;
-      console.log('✅ SELECT permission: GRANTED');
+      console.log(`✅ SELECT permission for ${tableName}: GRANTED`);
     } catch (error) {
-      console.log('❌ SELECT permission: DENIED -', error.message);
+      console.log(`❌ SELECT permission for ${tableName}: DENIED -`, error.message);
     }
     
-    // Test INSERT
-    try {
-      const testRecord = {
-        zip_code: "PERM_TEST",
-        price_per_kwh: 0.01,
-        savings: "Test",
-        terms: "Test",
-        info: "Permission test",
-        green: "N",
-        supplier_logo_url: "",
-        signup_url: "",
-        utility: "Permission Test",
-        fee: "",
-        scraped_at: new Date().toISOString()
-      };
-      
-      const { data, error } = await supabase
-        .from('powersetter')
-        .insert([testRecord])
-        .select();
-      
-      if (error) throw error;
-      
-      permissions.insert = true;
-      console.log('✅ INSERT permission: GRANTED');
-      
-      // Clean up test record
-      if (data && data[0]) {
-        await supabase
-          .from('powersetter')
-          .delete()
-          .eq('zip_code', 'PERM_TEST');
+    // Test INSERT (only for powersetter table to avoid creating test data in other tables)
+    if (tableName === 'powersetter') {
+      try {
+        const testRecord = {
+          zip_code: "PERM_TEST",
+          price_per_kwh: 0.01,
+          savings: "Test",
+          terms: "Test",
+          info: "Permission test",
+          green: "N",
+          supplier_logo_url: "",
+          signup_url: "",
+          utility: "Permission Test",
+          fee: "",
+          scraped_at: new Date().toISOString()
+        };
+        
+        const { data, error } = await supabase
+          .from(tableName)
+          .insert([testRecord])
+          .select();
+        
+        if (error) throw error;
+        
+        permissions.insert = true;
+        console.log(`✅ INSERT permission for ${tableName}: GRANTED`);
+        
+        // Clean up test record
+        if (data && data[0]) {
+          await supabase
+            .from(tableName)
+            .delete()
+            .eq('zip_code', 'PERM_TEST');
+        }
+      } catch (error) {
+        console.log(`❌ INSERT permission for ${tableName}: DENIED -`, error.message);
       }
-    } catch (error) {
-      console.log('❌ INSERT permission: DENIED -', error.message);
     }
     
     return permissions;
   } catch (error) {
-    console.error('Permission check failed:', error);
+    console.error(`Permission check failed for ${tableName}:`, error);
     return null;
   }
+};
+
+// Backward compatibility function
+export const checkDatabasePermissions = async () => {
+  return checkTablePermissions('powersetter');
+};
+
+// Get available tables that contain energy data
+export const getAvailableTables = async (): Promise<string[]> => {
+  const tables = ['powersetter', 'chooseenergy', 'electricityrates'];
+  const availableTables: string[] = [];
+  
+  for (const table of tables) {
+    try {
+      const result = await testTableConnection(table);
+      if (result.success && result.recordCount && result.recordCount > 0) {
+        availableTables.push(table);
+      }
+    } catch (error) {
+      console.log(`Table ${table} not available:`, error.message);
+    }
+  }
+  
+  return availableTables;
 };

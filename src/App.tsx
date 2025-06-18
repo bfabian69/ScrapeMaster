@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { ScrapedDataViewer } from './components/ScrapedDataViewer';
 import { ResultsViewer } from './components/ResultsViewer';
+import { DashboardStats } from './components/DashboardStats';
 
 function App() {
   const [activeTab, setActiveTab] = useState('landing');
@@ -69,7 +70,7 @@ function App() {
           <div className="max-w-7xl mx-auto text-center">
             <div className="mb-8">
               <span className="inline-block bg-blue-600/20 text-blue-300 px-4 py-2 rounded-full text-sm font-medium mb-6">
-                ⚡ PowerSetter Energy Rate Database
+                ⚡ Multi-Source Energy Rate Database
               </span>
               <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
                 Energy Rate
@@ -79,7 +80,7 @@ function App() {
                 </span>
               </h1>
               <p className="text-xl text-white/80 max-w-3xl mx-auto mb-8">
-                Explore and analyze electricity rate data from PowerSetter.com. 
+                Explore and analyze electricity rate data from multiple sources including PowerSetter, ChooseEnergy, and ElectricityRates. 
                 Compare rates across utilities, ZIP codes, and energy plans.
               </p>
             </div>
@@ -103,12 +104,12 @@ function App() {
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
               <div className="text-center">
-                <div className="text-3xl font-bold text-white mb-2">18</div>
-                <div className="text-white/60">ZIP Codes Covered</div>
+                <div className="text-3xl font-bold text-white mb-2">Multiple</div>
+                <div className="text-white/60">Data Sources</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-white mb-2">Multiple</div>
-                <div className="text-white/60">Energy Suppliers</div>
+                <div className="text-3xl font-bold text-white mb-2">Comprehensive</div>
+                <div className="text-white/60">Utility Coverage</div>
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-white mb-2">Real-time</div>
@@ -122,41 +123,41 @@ function App() {
         <section id="features" className="py-20 px-6 bg-white/5 backdrop-blur-sm">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-16">
-              <h2 className="text-4xl font-bold text-white mb-4">Energy Data Analysis</h2>
-              <p className="text-xl text-white/80">Comprehensive tools for energy rate exploration</p>
+              <h2 className="text-4xl font-bold text-white mb-4">Multi-Source Energy Data Analysis</h2>
+              <p className="text-xl text-white/80">Comprehensive tools for energy rate exploration across multiple platforms</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {[
                 {
                   icon: <BarChart3 className="w-8 h-8" />,
-                  title: "Rate Comparison",
-                  description: "Compare electricity rates across different utilities and ZIP codes"
+                  title: "Multi-Source Comparison",
+                  description: "Compare electricity rates from PowerSetter, ChooseEnergy, and ElectricityRates in one place"
                 },
                 {
                   icon: <Database className="w-8 h-8" />,
-                  title: "Comprehensive Data",
-                  description: "Access detailed information including terms, fees, and green energy options"
+                  title: "Comprehensive Database",
+                  description: "Access detailed information including terms, fees, green energy options across all platforms"
                 },
                 {
                   icon: <Filter className="w-8 h-8" />,
                   title: "Advanced Filtering",
-                  description: "Filter by utility, ZIP code, green energy, and more"
+                  description: "Filter by data source, utility, ZIP code, green energy, and more"
                 },
                 {
                   icon: <Download className="w-8 h-8" />,
                   title: "Data Export",
-                  description: "Export filtered data as CSV for further analysis"
+                  description: "Export filtered data as CSV for further analysis with source identification"
                 },
                 {
                   icon: <TrendingUp className="w-8 h-8" />,
-                  title: "Best Rate Identification",
-                  description: "Automatically identify the best rates and savings opportunities"
+                  title: "Cross-Platform Analysis",
+                  description: "Identify the best rates and savings opportunities across all data sources"
                 },
                 {
                   icon: <Shield className="w-8 h-8" />,
-                  title: "Reliable Data",
-                  description: "Accurate, up-to-date energy rate information from PowerSetter"
+                  title: "Reliable Multi-Source Data",
+                  description: "Accurate, up-to-date energy rate information from multiple trusted sources"
                 }
               ].map((feature, index) => (
                 <div key={index} className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20 hover:bg-white/20 transition-all">
@@ -249,9 +250,9 @@ function App() {
             <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-8 text-white">
               <div className="flex items-center justify-between">
                 <div>
-                  <h1 className="text-3xl font-bold mb-2">Energy Rate Database</h1>
+                  <h1 className="text-3xl font-bold mb-2">Energy Rate Database Dashboard</h1>
                   <p className="text-blue-100 text-lg">
-                    Explore electricity rates from PowerSetter.com across multiple utilities and ZIP codes
+                    Comprehensive electricity rate data from multiple sources including PowerSetter, ChooseEnergy, and ElectricityRates
                   </p>
                 </div>
                 <div className="hidden md:block">
@@ -260,44 +261,8 @@ function App() {
               </div>
             </div>
 
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Available Utilities</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">18</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-blue-100 text-blue-600">
-                    <Zap className="w-6 h-6" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">ZIP Codes</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">18</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-green-100 text-green-600">
-                    <Database className="w-6 h-6" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Data Sources</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">PowerSetter</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-orange-100 text-orange-600">
-                    <BarChart3 className="w-6 h-6" />
-                  </div>
-                </div>
-              </div>
-            </div>
+            {/* Dashboard Stats Component */}
+            <DashboardStats />
 
             {/* Quick Actions */}
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
@@ -311,7 +276,7 @@ function App() {
                     <TrendingUp className="w-6 h-6 text-blue-600" />
                     <div className="text-left">
                       <div className="font-semibold text-gray-900">Analyze Rates</div>
-                      <div className="text-sm text-gray-500">Compare rates by utility and find best deals</div>
+                      <div className="text-sm text-gray-500">Compare rates across multiple data sources and utilities</div>
                     </div>
                   </div>
                   <ArrowRight className="w-5 h-5 text-gray-400" />
@@ -324,38 +289,12 @@ function App() {
                   <div className="flex items-center space-x-3">
                     <Database className="w-6 h-6 text-green-600" />
                     <div className="text-left">
-                      <div className="font-semibold text-gray-900">View Raw Data</div>
-                      <div className="text-sm text-gray-500">Browse and export all energy rate data</div>
+                      <div className="font-semibold text-gray-900">Browse Raw Data</div>
+                      <div className="text-sm text-gray-500">View and export all energy rate data from all sources</div>
                     </div>
                   </div>
                   <ArrowRight className="w-5 h-5 text-gray-400" />
                 </button>
-              </div>
-            </div>
-
-            {/* Supported Utilities */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Supported Utilities</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[
-                  { name: "ComEd", zip: "60021", state: "IL" },
-                  { name: "Ameren", zip: "62634", state: "IL" },
-                  { name: "Eversource - NSTAR", zip: "01746", state: "MA" },
-                  { name: "Ohio Edison", zip: "44052", state: "OH" },
-                  { name: "Duke Energy", zip: "45255", state: "OH" },
-                  { name: "PPL Electric", zip: "17017", state: "PA" },
-                  { name: "PECO Energy", zip: "19122", state: "PA" },
-                  { name: "PSEG", zip: "07083", state: "NJ" },
-                  { name: "Atlantic City Electric", zip: "08001", state: "NJ" }
-                ].map((utility, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                    <div>
-                      <div className="font-medium text-gray-900">{utility.name}</div>
-                      <div className="text-sm text-gray-500">{utility.zip} • {utility.state}</div>
-                    </div>
-                    <Zap className="w-4 h-4 text-blue-600" />
-                  </div>
-                ))}
               </div>
             </div>
           </div>

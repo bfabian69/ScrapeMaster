@@ -19,7 +19,8 @@ export const supabase = createClient(supabaseUrl || '', supabaseKey || '');
 
 export const getPowerSetterData = async (zipCode?: string): Promise<PowerSetterData[]> => {
   try {
-    console.log('getPowerSetterData called with zipCode:', zipCode);
+    console.log('=== getPowerSetterData called ===');
+    console.log('Querying powersetter table with zipCode:', zipCode);
     
     let query = supabase
       .from('powersetter')
@@ -30,11 +31,11 @@ export const getPowerSetterData = async (zipCode?: string): Promise<PowerSetterD
       query = query.eq('zip_code', zipCode);
     }
     
-    console.log('Executing query...');
+    console.log('Executing query on powersetter table...');
     const { data, error } = await query;
     
     if (error) {
-      console.error('Error fetching PowerSetter data:', error);
+      console.error('Error fetching PowerSetter data from powersetter table:', error);
       console.error('Error details:', {
         message: error.message,
         details: error.details,
@@ -65,6 +66,7 @@ export const getPowerSetterData = async (zipCode?: string): Promise<PowerSetterD
 export const getUtilities = async (): Promise<string[]> => {
   try {
     console.log('=== Starting getUtilities function ===');
+    console.log('Querying powersetter table for utilities...');
     
     // First, let's check if we can connect to the table at all
     console.log('Step 1: Testing basic table access...');
@@ -91,13 +93,14 @@ export const getUtilities = async (): Promise<string[]> => {
     }
     
     console.log('Step 1 SUCCESS: Basic table access works');
-    console.log('Sample records from table:', testData);
+    console.log('Sample records from powersetter table:', testData);
     
     // Now let's specifically query for utilities
     console.log('Step 2: Querying for utility column...');
     const { data, error } = await supabase
       .from('powersetter')
       .select('utility')
+      .not('utility', 'is', null)
       .limit(1000);
     
     if (error) {
@@ -182,12 +185,12 @@ export const getPTCData = async (): Promise<{ [utility: string]: number }> => {
 
 export const insertPowerSetterData = async (data: PowerSetterData[]) => {
   try {
-    console.log('=== ATTEMPTING TO INSERT DATA ===');
+    console.log('=== ATTEMPTING TO INSERT DATA INTO POWERSETTER TABLE ===');
     console.log('Data to insert:', data.length, 'records');
     console.log('Sample record:', data[0]);
     
     // Test permissions first
-    console.log('Testing INSERT permissions...');
+    console.log('Testing INSERT permissions on powersetter table...');
     const testRecord = {
       zip_code: "TEST",
       price_per_kwh: 0.01,
@@ -235,7 +238,7 @@ export const insertPowerSetterData = async (data: PowerSetterData[]) => {
     }
     
     // Now insert the actual data
-    console.log('Inserting actual data...');
+    console.log('Inserting actual data into powersetter table...');
     const { data: insertResult, error: insertError } = await supabase
       .from('powersetter')
       .insert(data)
@@ -261,7 +264,7 @@ export const insertPowerSetterData = async (data: PowerSetterData[]) => {
       .select('*', { count: 'exact', head: true });
     
     if (!countError) {
-      console.log('✅ Verification: Total records in table after insert:', count);
+      console.log('✅ Verification: Total records in powersetter table after insert:', count);
     }
     
     return insertResult;
@@ -297,7 +300,7 @@ export const deletePowerSetterData = async (zipCode?: string) => {
 // Test connection function
 export const testConnection = async () => {
   try {
-    console.log('=== Testing Supabase connection ===');
+    console.log('=== Testing Supabase connection to powersetter table ===');
     console.log('Supabase URL:', supabaseUrl);
     console.log('Supabase Key:', supabaseKey ? 'Present' : 'Missing');
     
@@ -330,7 +333,7 @@ export const testConnection = async () => {
     
     return { 
       success: true, 
-      message: 'Connected successfully',
+      message: 'Connected successfully to powersetter table',
       recordCount: count 
     };
   } catch (error) {
@@ -345,7 +348,7 @@ export const testConnection = async () => {
 // Check database permissions
 export const checkDatabasePermissions = async () => {
   try {
-    console.log('=== Checking Database Permissions ===');
+    console.log('=== Checking Database Permissions for powersetter table ===');
     
     const permissions = {
       select: false,

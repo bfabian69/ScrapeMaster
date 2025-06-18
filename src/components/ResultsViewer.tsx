@@ -71,7 +71,7 @@ export const ResultsViewer: React.FC = () => {
     
     try {
       // Step 1: Test connection
-      setDebugInfo('Testing database connection...');
+      setDebugInfo('Testing database connection to powersetter table...');
       await checkConnection();
       
       // Step 2: Check permissions

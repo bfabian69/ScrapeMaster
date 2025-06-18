@@ -8,9 +8,10 @@ import {
   TrendingUp,
   Calendar,
   Activity,
-  RefreshCw
+  RefreshCw,
+  DollarSign
 } from 'lucide-react';
-import { getAvailableTables, getEnergyData, getUtilitiesFromTable } from '../services/supabase';
+import { getAvailableTables, getEnergyData, getUtilitiesFromTable, getPTCData } from '../services/supabase';
 
 interface DashboardData {
   totalRecords: number;
@@ -31,6 +32,10 @@ interface DashboardData {
     zipCode: string;
     date: string;
   }[];
+  utilitiesWithPTC: {
+    utility: string;
+    ptc: number;
+  }[];
 }
 
 export const DashboardStats: React.FC = () => {
@@ -40,7 +45,8 @@ export const DashboardStats: React.FC = () => {
     totalZipCodes: 0,
     availableTables: [],
     tableStats: {},
-    recentActivity: []
+    recentActivity: [],
+    utilitiesWithPTC: []
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +66,10 @@ export const DashboardStats: React.FC = () => {
       const tables = await getAvailableTables();
       console.log('Available tables:', tables);
       
+      // Load PTC data
+      const ptcData = await getPTCData();
+      console.log('PTC data loaded:', ptcData);
+      
       if (tables.length === 0) {
         setDashboardData({
           totalRecords: 0,
@@ -67,7 +77,8 @@ export const DashboardStats: React.FC = () => {
           totalZipCodes: 0,
           availableTables: [],
           tableStats: {},
-          recentActivity: []
+          recentActivity: [],
+          utilitiesWithPTC: []
         });
         setLoading(false);
         return;
@@ -137,20 +148,31 @@ export const DashboardStats: React.FC = () => {
       recentActivity.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       const limitedActivity = recentActivity.slice(0, 10);
       
+      // Create utilities with PTC list
+      const utilitiesWithPTC = Array.from(allUtilities)
+        .map(utility => ({
+          utility,
+          ptc: ptcData[utility] || 0
+        }))
+        .filter(item => item.ptc > 0)
+        .sort((a, b) => a.utility.localeCompare(b.utility));
+      
       setDashboardData({
         totalRecords,
         totalUtilities: allUtilities.size,
         totalZipCodes: allZipCodes.size,
         availableTables: tables,
         tableStats,
-        recentActivity: limitedActivity
+        recentActivity: limitedActivity,
+        utilitiesWithPTC
       });
       
       console.log('Dashboard data loaded:', {
         totalRecords,
         totalUtilities: allUtilities.size,
         totalZipCodes: allZipCodes.size,
-        tables: tables.length
+        tables: tables.length,
+        utilitiesWithPTC: utilitiesWithPTC.length
       });
       
     } catch (error) {
@@ -276,6 +298,46 @@ export const DashboardStats: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Utilities with PTC Prices */}
+      {dashboardData.utilitiesWithPTC.length > 0 && (
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+          <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
+            <Building2 className="w-6 h-6 text-blue-600 mr-2" />
+            Utilities & Price to Compare (PTC)
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {dashboardData.utilitiesWithPTC.map((item, index) => (
+              <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Zap className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-900 text-sm">{item.utility}</div>
+                    <div className="text-xs text-gray-500">Utility Company</div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="flex items-center text-green-600 font-semibold">
+                    <DollarSign className="w-4 h-4 mr-1" />
+                    <span>{item.ptc.toFixed(2)}¢</span>
+                  </div>
+                  <div className="text-xs text-gray-500">per kWh</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-700">
+              <strong>Price to Compare (PTC):</strong> The official utility rate used as a baseline for comparing energy supplier offers. 
+              Rates below the PTC represent potential savings.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Data Sources Breakdown */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">

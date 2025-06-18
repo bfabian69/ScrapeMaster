@@ -624,7 +624,6 @@ export const ResultsViewer: React.FC = () => {
               {utilities.map(utility => (
                 <option key={utility} value={utility} className="text-gray-900">
                   {utility}
-                  {ptcData[utility] && ` (PTC: ${ptcData[utility].toFixed(2)}¢/kWh)`}
                 </option>
               ))}
             </select>

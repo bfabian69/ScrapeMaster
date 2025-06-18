@@ -48,7 +48,7 @@ function App() {
             <div className="flex justify-between items-center">
               <div className="flex items-center space-x-2">
                 <Zap className="w-8 h-8 text-blue-400" />
-                <span className="text-xl font-bold text-white">Energy Rate Analyzer</span>
+                <span className="text-xl font-bold text-white">Find Energy Rates</span>
               </div>
               <div className="hidden md:flex space-x-8">
                 <a href="#features" className="text-white/80 hover:text-white transition-colors">Features</a>
@@ -73,10 +73,10 @@ function App() {
                 ⚡ Multi-Source Energy Rate Database
               </span>
               <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
-                Energy Rate
+                Find Energy
                 <br />
                 <span className="bg-gradient-to-r from-blue-400 to-green-400 bg-clip-text text-transparent">
-                  Data Explorer
+                  Rates
                 </span>
               </h1>
               <p className="text-xl text-white/80 max-w-3xl mx-auto mb-8">
@@ -178,7 +178,7 @@ function App() {
             <div className="flex flex-col md:flex-row justify-between items-center">
               <div className="flex items-center space-x-2 mb-4 md:mb-0">
                 <Zap className="w-6 h-6 text-blue-400" />
-                <span className="text-lg font-semibold text-white">Energy Rate Analyzer</span>
+                <span className="text-lg font-semibold text-white">Find Energy Rates</span>
               </div>
               <div className="flex space-x-6 text-white/60">
                 <a href="#" className="hover:text-white transition-colors">Privacy</a>
@@ -187,7 +187,7 @@ function App() {
               </div>
             </div>
             <div className="mt-8 pt-8 border-t border-white/20 text-center text-white/60">
-              <p>&copy; 2024 Energy Rate Analyzer. All rights reserved.</p>
+              <p>&copy; 2024 Find Energy Rates. All rights reserved.</p>
             </div>
           </div>
         </footer>
@@ -204,7 +204,7 @@ function App() {
             <div className="flex items-center space-x-6">
               <div className="flex items-center space-x-2">
                 <Zap className="w-8 h-8 text-blue-600" />
-                <span className="text-xl font-bold text-gray-900">Energy Rate Analyzer</span>
+                <span className="text-xl font-bold text-gray-900">Find Energy Rates</span>
               </div>
               <nav className="hidden md:flex space-x-6">
                 <button 

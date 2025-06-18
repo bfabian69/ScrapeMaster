@@ -36,8 +36,8 @@ export class PowerSetterScraper {
     console.log(`🚀 Starting REAL PowerSetter scraping for ${this.config.zipCodes.length} ZIP codes via Node.js backend`);
     
     try {
-      // Call the Node.js backend API
-      const response = await fetch('http://localhost:5000/api/scrape', {
+      // Call the Node.js backend API on port 3001
+      const response = await fetch('http://localhost:3001/api/scrape', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -78,7 +78,7 @@ export class PowerSetterScraper {
       
       // Check if it's a connection error to the backend
       if (error.message.includes('fetch')) {
-        throw new Error('Cannot connect to Node.js backend. Please ensure the backend server is running on http://localhost:5000');
+        throw new Error('Cannot connect to Node.js backend. Please ensure the backend server is running on http://localhost:3001');
       }
       
       throw error;

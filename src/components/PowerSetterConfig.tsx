@@ -21,7 +21,7 @@ export const PowerSetterConfig: React.FC<PowerSetterConfigProps> = ({ onStartScr
 
   const checkBackendStatus = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/health');
+      const response = await fetch('http://localhost:3001/health');
       if (response.ok) {
         setBackendStatus('connected');
       } else {
@@ -78,7 +78,8 @@ export const PowerSetterConfig: React.FC<PowerSetterConfigProps> = ({ onStartScr
                   <li>Open a terminal and navigate to the <code className="bg-red-200 px-1 rounded">backend</code> folder</li>
                   <li>Install dependencies: <code className="bg-red-200 px-1 rounded">npm install</code></li>
                   <li>Install Chrome (if not already installed)</li>
-                  <li>Run the backend: <code className="bg-red-200 px-1 rounded">node server.js</code></li>
+                  <li>Run the backend: <code className="bg-red-200 px-1 rounded">npm run dev</code></li>
+                  <li>Backend should start on port 3001</li>
                   <li>Come back and refresh this page</li>
                 </ol>
               </div>
@@ -90,17 +91,15 @@ export const PowerSetterConfig: React.FC<PowerSetterConfigProps> = ({ onStartScr
                 >
                   Check Again
                 </button>
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    alert('Navigate to the backend folder and run: npm install && node server.js');
+                <button
+                  onClick={() => {
+                    alert('Navigate to the backend folder and run: npm install && npm run dev');
                   }}
                   className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center space-x-2"
                 >
                   <ExternalLink className="w-4 h-4" />
                   <span>Setup Guide</span>
-                </a>
+                </button>
               </div>
             </div>
           </div>
@@ -121,7 +120,7 @@ export const PowerSetterConfig: React.FC<PowerSetterConfigProps> = ({ onStartScr
                 backendStatus === 'error' ? 'bg-red-500' : 'bg-yellow-500'
               }`}></div>
               <span className="text-gray-600">
-                Backend: {backendStatus === 'connected' ? 'Connected' : 
+                Backend: {backendStatus === 'connected' ? 'Connected (Port 3001)' : 
                          backendStatus === 'error' ? 'Disconnected' : 'Checking...'}
               </span>
             </div>

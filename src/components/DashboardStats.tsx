@@ -26,12 +26,6 @@ interface DashboardData {
       lastUpdated?: string;
     };
   };
-  recentActivity: {
-    table: string;
-    utility: string;
-    zipCode: string;
-    date: string;
-  }[];
   utilitiesWithPTC: {
     utility: string;
     ptc: number;
@@ -45,7 +39,6 @@ export const DashboardStats: React.FC = () => {
     totalZipCodes: 0,
     availableTables: [],
     tableStats: {},
-    recentActivity: [],
     utilitiesWithPTC: []
   });
   const [loading, setLoading] = useState(true);
@@ -77,7 +70,6 @@ export const DashboardStats: React.FC = () => {
           totalZipCodes: 0,
           availableTables: [],
           tableStats: {},
-          recentActivity: [],
           utilitiesWithPTC: []
         });
         setLoading(false);
@@ -87,7 +79,6 @@ export const DashboardStats: React.FC = () => {
       const tableStats: DashboardData['tableStats'] = {};
       const allUtilities = new Set<string>();
       const allZipCodes = new Set<string>();
-      const recentActivity: DashboardData['recentActivity'] = [];
       let totalRecords = 0;
       
       // Load data for each table
@@ -120,18 +111,6 @@ export const DashboardStats: React.FC = () => {
           tableUtilities.forEach(utility => allUtilities.add(utility));
           tableZipCodes.forEach(zip => allZipCodes.add(zip));
           
-          // Add recent activity (last 5 records from this table)
-          const recentFromTable = tableData
-            .slice(0, 5)
-            .map(record => ({
-              table,
-              utility: record.utility || 'Unknown',
-              zipCode: record.zip_code || 'Unknown',
-              date: record.scraped_at
-            }));
-          
-          recentActivity.push(...recentFromTable);
-          
           console.log(`${table} stats:`, tableStats[table]);
           
         } catch (tableError) {
@@ -143,10 +122,6 @@ export const DashboardStats: React.FC = () => {
           };
         }
       }
-      
-      // Sort recent activity by date (most recent first) and limit to 10
-      recentActivity.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      const limitedActivity = recentActivity.slice(0, 10);
       
       // Create utilities with PTC list
       const utilitiesWithPTC = Array.from(allUtilities)
@@ -163,7 +138,6 @@ export const DashboardStats: React.FC = () => {
         totalZipCodes: allZipCodes.size,
         availableTables: tables,
         tableStats,
-        recentActivity: limitedActivity,
         utilitiesWithPTC
       });
       
@@ -198,19 +172,6 @@ export const DashboardStats: React.FC = () => {
         month: 'short',
         day: 'numeric',
         year: 'numeric'
-      });
-    } catch {
-      return 'Unknown';
-    }
-  };
-
-  const formatDateTime = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
       });
     } catch {
       return 'Unknown';
@@ -395,37 +356,6 @@ export const DashboardStats: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* Recent Activity */}
-      {dashboardData.recentActivity.length > 0 && (
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
-            <Activity className="w-6 h-6 text-green-600 mr-2" />
-            Recent Activity
-          </h2>
-          
-          <div className="space-y-3">
-            {dashboardData.recentActivity.map((activity, index) => (
-              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">
-                      {activity.utility} • {activity.zipCode}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {getTableDisplayName(activity.table)} data source
-                    </div>
-                  </div>
-                </div>
-                <div className="text-xs text-gray-500">
-                  {formatDateTime(activity.date)}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

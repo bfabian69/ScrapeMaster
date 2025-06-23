@@ -31,7 +31,7 @@ interface DashboardData {
   ptcUtilities: Array<{
     utility: string;
     price_to_compare: number;
-    state?: string;
+    state: string;
   }>;
 }
 
@@ -63,7 +63,7 @@ export const DashboardStats: React.FC = () => {
       const tables = await getAvailableTables();
       console.log('Available tables:', tables);
       
-      // Load PTC data with details
+      // Load PTC data with details (including state from database)
       const ptcUtilities = await getPTCDataWithDetails();
       console.log('PTC utilities loaded:', ptcUtilities);
       
@@ -127,7 +127,7 @@ export const DashboardStats: React.FC = () => {
         }
       }
       
-      // Set initial expanded states to true (all open)
+      // Set initial expanded states to true (all open) for all states found in PTC data
       const initialExpandedStates: { [state: string]: boolean } = {};
       const stateGroups = groupUtilitiesByState(ptcUtilities);
       Object.keys(stateGroups).forEach(state => {
@@ -181,7 +181,7 @@ export const DashboardStats: React.FC = () => {
     }
   };
 
-  // Group utilities by state using data from PTC table
+  // Group utilities by state using the state column from PTC table
   const groupUtilitiesByState = (utilities: typeof dashboardData.ptcUtilities) => {
     const stateGroups: { [state: string]: typeof utilities } = {};
     

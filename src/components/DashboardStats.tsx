@@ -357,7 +357,7 @@ export const DashboardStats: React.FC = () => {
           <div className="mt-4 p-3 bg-blue-50 rounded-lg">
             <p className="text-sm text-blue-700">
               <strong>Price to Compare (PTC):</strong> The official utility rate used as a baseline for comparing energy supplier offers. 
-              Rates below the PTC represent potential savings. Data sourced directly from the PTC database table.
+              Rates below the PTC represent potential savings.
             </p>
           </div>
         </div>

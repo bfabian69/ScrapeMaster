@@ -13,7 +13,7 @@ import {
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
-import { getAvailableTables, getEnergyData, getUtilitiesFromTable, getPTCData } from '../services/supabase';
+import { getAvailableTables, getEnergyData, getUtilitiesFromTable, getPTCDataWithDetails } from '../services/supabase';
 
 interface DashboardData {
   totalRecords: number;
@@ -28,33 +28,12 @@ interface DashboardData {
       lastUpdated?: string;
     };
   };
-  utilitiesWithPTC: {
+  ptcUtilities: Array<{
     utility: string;
-    ptc: number;
-  }[];
+    price_to_compare: number;
+    state?: string;
+  }>;
 }
-
-// Utility to state mapping
-const utilityStateMapping: { [utility: string]: string } = {
-  "ComEd": "Illinois",
-  "Ameren": "Illinois",
-  "Eversource - NSTAR": "Massachusetts",
-  "Eversource - WMECO": "Massachusetts",
-  "Ohio Edison": "Ohio",
-  "Duke Energy": "Ohio",
-  "AEP - Ohio Power": "Ohio",
-  "AEP Columbus": "Ohio",
-  "Toledo Edison": "Ohio",
-  "The Illuminating Company": "Ohio",
-  "PPL Electric": "Pennsylvania",
-  "Met-Ed": "Pennsylvania",
-  "PECO Energy": "Pennsylvania",
-  "Penelec": "Pennsylvania",
-  "Atlantic City Electric": "New Jersey",
-  "Public Service Electric & Gas (PSEG)": "New Jersey",
-  "JCPL": "New Jersey",
-  "Nat Grid - MA": "Massachusetts"
-};
 
 export const DashboardStats: React.FC = () => {
   const [dashboardData, setDashboardData] = useState<DashboardData>({
@@ -63,7 +42,7 @@ export const DashboardStats: React.FC = () => {
     totalZipCodes: 0,
     availableTables: [],
     tableStats: {},
-    utilitiesWithPTC: []
+    ptcUtilities: []
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -84,9 +63,9 @@ export const DashboardStats: React.FC = () => {
       const tables = await getAvailableTables();
       console.log('Available tables:', tables);
       
-      // Load PTC data
-      const ptcData = await getPTCData();
-      console.log('PTC data loaded:', ptcData);
+      // Load PTC data with details
+      const ptcUtilities = await getPTCDataWithDetails();
+      console.log('PTC utilities loaded:', ptcUtilities);
       
       if (tables.length === 0) {
         setDashboardData({
@@ -95,7 +74,7 @@ export const DashboardStats: React.FC = () => {
           totalZipCodes: 0,
           availableTables: [],
           tableStats: {},
-          utilitiesWithPTC: []
+          ptcUtilities
         });
         setLoading(false);
         return;
@@ -148,14 +127,13 @@ export const DashboardStats: React.FC = () => {
         }
       }
       
-      // Create utilities with PTC list
-      const utilitiesWithPTC = Array.from(allUtilities)
-        .map(utility => ({
-          utility,
-          ptc: ptcData[utility] || 0
-        }))
-        .filter(item => item.ptc > 0)
-        .sort((a, b) => a.utility.localeCompare(b.utility));
+      // Set initial expanded states to true (all open)
+      const initialExpandedStates: { [state: string]: boolean } = {};
+      const stateGroups = groupUtilitiesByState(ptcUtilities);
+      Object.keys(stateGroups).forEach(state => {
+        initialExpandedStates[state] = true;
+      });
+      setExpandedStates(initialExpandedStates);
       
       setDashboardData({
         totalRecords,
@@ -163,7 +141,7 @@ export const DashboardStats: React.FC = () => {
         totalZipCodes: allZipCodes.size,
         availableTables: tables,
         tableStats,
-        utilitiesWithPTC
+        ptcUtilities
       });
       
       console.log('Dashboard data loaded:', {
@@ -171,7 +149,7 @@ export const DashboardStats: React.FC = () => {
         totalUtilities: allUtilities.size,
         totalZipCodes: allZipCodes.size,
         tables: tables.length,
-        utilitiesWithPTC: utilitiesWithPTC.length
+        ptcUtilities: ptcUtilities.length
       });
       
     } catch (error) {
@@ -203,12 +181,12 @@ export const DashboardStats: React.FC = () => {
     }
   };
 
-  // Group utilities by state
-  const groupUtilitiesByState = () => {
-    const stateGroups: { [state: string]: typeof dashboardData.utilitiesWithPTC } = {};
+  // Group utilities by state using data from PTC table
+  const groupUtilitiesByState = (utilities: typeof dashboardData.ptcUtilities) => {
+    const stateGroups: { [state: string]: typeof utilities } = {};
     
-    dashboardData.utilitiesWithPTC.forEach(item => {
-      const state = utilityStateMapping[item.utility] || 'Other';
+    utilities.forEach(item => {
+      const state = item.state || 'Other';
       if (!stateGroups[state]) {
         stateGroups[state] = [];
       }
@@ -217,7 +195,7 @@ export const DashboardStats: React.FC = () => {
     
     // Sort states alphabetically and utilities within each state
     const sortedStates = Object.keys(stateGroups).sort();
-    const result: { [state: string]: typeof dashboardData.utilitiesWithPTC } = {};
+    const result: { [state: string]: typeof utilities } = {};
     
     sortedStates.forEach(state => {
       result[state] = stateGroups[state].sort((a, b) => a.utility.localeCompare(b.utility));
@@ -262,7 +240,7 @@ export const DashboardStats: React.FC = () => {
     );
   }
 
-  const utilitiesByState = groupUtilitiesByState();
+  const utilitiesByState = groupUtilitiesByState(dashboardData.ptcUtilities);
 
   return (
     <div className="space-y-8">
@@ -363,7 +341,7 @@ export const DashboardStats: React.FC = () => {
                           <div className="text-right">
                             <div className="flex items-center text-green-600 font-semibold">
                               <DollarSign className="w-4 h-4 mr-1" />
-                              <span>{item.ptc.toFixed(2)}¢</span>
+                              <span>{item.price_to_compare.toFixed(2)}¢</span>
                             </div>
                             <div className="text-xs text-gray-500">per kWh</div>
                           </div>
@@ -379,7 +357,7 @@ export const DashboardStats: React.FC = () => {
           <div className="mt-4 p-3 bg-blue-50 rounded-lg">
             <p className="text-sm text-blue-700">
               <strong>Price to Compare (PTC):</strong> The official utility rate used as a baseline for comparing energy supplier offers. 
-              Rates below the PTC represent potential savings. Click on a state to expand and view utilities.
+              Rates below the PTC represent potential savings. Data sourced directly from the PTC database table.
             </p>
           </div>
         </div>

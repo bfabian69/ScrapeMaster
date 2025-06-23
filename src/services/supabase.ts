@@ -195,6 +195,72 @@ export const getPTCData = async (): Promise<{ [utility: string]: number }> => {
   }
 };
 
+// New function to get full PTC data with utility details
+export const getPTCDataWithDetails = async (): Promise<Array<{
+  utility: string;
+  price_to_compare: number;
+  state?: string;
+}>> => {
+  try {
+    console.log('Loading detailed PTC data...');
+    const { data, error } = await supabase
+      .from('ptc')
+      .select('utility, price_to_compare')
+      .order('utility');
+    
+    if (error) {
+      console.error('Error fetching detailed PTC data:', error);
+      return [];
+    }
+    
+    if (!data) {
+      return [];
+    }
+    
+    // Extract state from utility name and convert price to cents
+    const ptcDataWithDetails = data.map(row => {
+      const utility = row.utility?.trim();
+      const price = row.price_to_compare;
+      
+      if (!utility || price === null || price === undefined) {
+        return null;
+      }
+      
+      // Extract state from utility name
+      let state = 'Other';
+      
+      // State detection logic based on utility names
+      if (utility.includes('ComEd') || utility.includes('Ameren')) {
+        state = 'Illinois';
+      } else if (utility.includes('Eversource') || utility.includes('Nat Grid')) {
+        state = 'Massachusetts';
+      } else if (utility.includes('Ohio Edison') || utility.includes('Duke Energy') || 
+                 utility.includes('AEP') || utility.includes('Toledo Edison') || 
+                 utility.includes('Illuminating Company')) {
+        state = 'Ohio';
+      } else if (utility.includes('PPL Electric') || utility.includes('Met-Ed') || 
+                 utility.includes('PECO Energy') || utility.includes('Penelec')) {
+        state = 'Pennsylvania';
+      } else if (utility.includes('Atlantic City Electric') || utility.includes('PSEG') || 
+                 utility.includes('JCPL')) {
+        state = 'New Jersey';
+      }
+      
+      return {
+        utility,
+        price_to_compare: parseFloat(price) * 100, // Convert to cents
+        state
+      };
+    }).filter(item => item !== null);
+    
+    console.log('Detailed PTC data loaded:', ptcDataWithDetails);
+    return ptcDataWithDetails;
+  } catch (error) {
+    console.error('Error fetching detailed PTC data:', error);
+    return [];
+  }
+};
+
 export const insertPowerSetterData = async (data: PowerSetterData[]) => {
   try {
     console.log('=== ATTEMPTING TO INSERT DATA INTO POWERSETTER TABLE ===');

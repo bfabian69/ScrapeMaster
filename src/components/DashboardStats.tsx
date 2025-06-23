@@ -9,7 +9,9 @@ import {
   Calendar,
   Activity,
   RefreshCw,
-  DollarSign
+  DollarSign,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { getAvailableTables, getEnergyData, getUtilitiesFromTable, getPTCData } from '../services/supabase';
 
@@ -32,6 +34,28 @@ interface DashboardData {
   }[];
 }
 
+// Utility to state mapping
+const utilityStateMapping: { [utility: string]: string } = {
+  "ComEd": "Illinois",
+  "Ameren": "Illinois",
+  "Eversource - NSTAR": "Massachusetts",
+  "Eversource - WMECO": "Massachusetts",
+  "Ohio Edison": "Ohio",
+  "Duke Energy": "Ohio",
+  "AEP - Ohio Power": "Ohio",
+  "AEP Columbus": "Ohio",
+  "Toledo Edison": "Ohio",
+  "The Illuminating Company": "Ohio",
+  "PPL Electric": "Pennsylvania",
+  "Met-Ed": "Pennsylvania",
+  "PECO Energy": "Pennsylvania",
+  "Penelec": "Pennsylvania",
+  "Atlantic City Electric": "New Jersey",
+  "Public Service Electric & Gas (PSEG)": "New Jersey",
+  "JCPL": "New Jersey",
+  "Nat Grid - MA": "Massachusetts"
+};
+
 export const DashboardStats: React.FC = () => {
   const [dashboardData, setDashboardData] = useState<DashboardData>({
     totalRecords: 0,
@@ -43,6 +67,7 @@ export const DashboardStats: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedStates, setExpandedStates] = useState<{ [state: string]: boolean }>({});
 
   useEffect(() => {
     loadDashboardData();
@@ -178,6 +203,36 @@ export const DashboardStats: React.FC = () => {
     }
   };
 
+  // Group utilities by state
+  const groupUtilitiesByState = () => {
+    const stateGroups: { [state: string]: typeof dashboardData.utilitiesWithPTC } = {};
+    
+    dashboardData.utilitiesWithPTC.forEach(item => {
+      const state = utilityStateMapping[item.utility] || 'Other';
+      if (!stateGroups[state]) {
+        stateGroups[state] = [];
+      }
+      stateGroups[state].push(item);
+    });
+    
+    // Sort states alphabetically and utilities within each state
+    const sortedStates = Object.keys(stateGroups).sort();
+    const result: { [state: string]: typeof dashboardData.utilitiesWithPTC } = {};
+    
+    sortedStates.forEach(state => {
+      result[state] = stateGroups[state].sort((a, b) => a.utility.localeCompare(b.utility));
+    });
+    
+    return result;
+  };
+
+  const toggleStateExpansion = (state: string) => {
+    setExpandedStates(prev => ({
+      ...prev,
+      [state]: !prev[state]
+    }));
+  };
+
   if (loading) {
     return (
       <div className="space-y-8">
@@ -206,6 +261,8 @@ export const DashboardStats: React.FC = () => {
       </div>
     );
   }
+
+  const utilitiesByState = groupUtilitiesByState();
 
   return (
     <div className="space-y-8">
@@ -260,33 +317,61 @@ export const DashboardStats: React.FC = () => {
         </div>
       </div>
 
-      {/* Utilities with PTC Prices */}
-      {dashboardData.utilitiesWithPTC.length > 0 && (
+      {/* Utilities with PTC Prices by State */}
+      {Object.keys(utilitiesByState).length > 0 && (
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
           <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
             <Building2 className="w-6 h-6 text-blue-600 mr-2" />
-            Utilities & Price to Compare (PTC)
+            Utilities & Price to Compare (PTC) by State
           </h2>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {dashboardData.utilitiesWithPTC.map((item, index) => (
-              <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Zap className="w-4 h-4 text-blue-600" />
+          <div className="space-y-4">
+            {Object.entries(utilitiesByState).map(([state, utilities]) => (
+              <div key={state} className="border border-gray-200 rounded-lg overflow-hidden">
+                {/* State Header */}
+                <button
+                  onClick={() => toggleStateExpansion(state)}
+                  className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
+                >
+                  <div className="flex items-center space-x-3">
+                    <MapPin className="w-5 h-5 text-blue-600" />
+                    <span className="font-semibold text-gray-900">{state}</span>
+                    <span className="text-sm text-gray-500">({utilities.length} utilities)</span>
                   </div>
-                  <div>
-                    <div className="font-medium text-gray-900 text-sm">{item.utility}</div>
-                    <div className="text-xs text-gray-500">Utility Company</div>
+                  {expandedStates[state] ? (
+                    <ChevronDown className="w-5 h-5 text-gray-400" />
+                  ) : (
+                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                  )}
+                </button>
+                
+                {/* Utilities List */}
+                {expandedStates[state] && (
+                  <div className="p-4 bg-white">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {utilities.map((item, index) => (
+                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                          <div className="flex items-center space-x-3">
+                            <div className="p-2 bg-blue-100 rounded-lg">
+                              <Zap className="w-4 h-4 text-blue-600" />
+                            </div>
+                            <div>
+                              <div className="font-medium text-gray-900 text-sm">{item.utility}</div>
+                              <div className="text-xs text-gray-500">Utility Company</div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="flex items-center text-green-600 font-semibold">
+                              <DollarSign className="w-4 h-4 mr-1" />
+                              <span>{item.ptc.toFixed(2)}¢</span>
+                            </div>
+                            <div className="text-xs text-gray-500">per kWh</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <div className="flex items-center text-green-600 font-semibold">
-                    <DollarSign className="w-4 h-4 mr-1" />
-                    <span>{item.ptc.toFixed(2)}¢</span>
-                  </div>
-                  <div className="text-xs text-gray-500">per kWh</div>
-                </div>
+                )}
               </div>
             ))}
           </div>
@@ -294,7 +379,7 @@ export const DashboardStats: React.FC = () => {
           <div className="mt-4 p-3 bg-blue-50 rounded-lg">
             <p className="text-sm text-blue-700">
               <strong>Price to Compare (PTC):</strong> The official utility rate used as a baseline for comparing energy supplier offers. 
-              Rates below the PTC represent potential savings.
+              Rates below the PTC represent potential savings. Click on a state to expand and view utilities.
             </p>
           </div>
         </div>

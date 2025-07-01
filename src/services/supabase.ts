@@ -17,63 +17,6 @@ if (!supabaseUrl || !supabaseKey) {
 
 export const supabase = createClient(supabaseUrl || '', supabaseKey || '');
 
-// New diagnostic function to find West Penn Power variations
-export const findWestPennPowerVariations = async (tableName: string = 'electricityrates') => {
-  try {
-    console.log(`=== Searching for West Penn Power variations in ${tableName} table ===`);
-    
-    // Search for any utility containing "penn" (case insensitive)
-    const { data: pennData, error: pennError } = await supabase
-      .from(tableName)
-      .select('utility')
-      .ilike('utility', '%penn%');
-    
-    if (pennError) {
-      console.error('Error searching for Penn utilities:', pennError);
-    } else {
-      console.log('Utilities containing "penn":', pennData?.map(r => r.utility) || []);
-    }
-    
-    // Search for any utility containing "west" (case insensitive)
-    const { data: westData, error: westError } = await supabase
-      .from(tableName)
-      .select('utility')
-      .ilike('utility', '%west%');
-    
-    if (westError) {
-      console.error('Error searching for West utilities:', westError);
-    } else {
-      console.log('Utilities containing "west":', westData?.map(r => r.utility) || []);
-    }
-    
-    // Get a sample of all records to see the exact utility values
-    const { data: sampleData, error: sampleError } = await supabase
-      .from(tableName)
-      .select('utility')
-      .limit(100);
-    
-    if (sampleError) {
-      console.error('Error getting sample data:', sampleError);
-    } else {
-      const allUtilities = [...new Set(sampleData?.map(r => r.utility).filter(u => u))].sort();
-      console.log('All unique utilities in sample (first 50):', allUtilities.slice(0, 50));
-      
-      // Look for any utility that might be West Penn Power with different formatting
-      const possibleMatches = allUtilities.filter(u => 
-        u.toLowerCase().includes('penn') || 
-        u.toLowerCase().includes('west') ||
-        u.toLowerCase().includes('power')
-      );
-      console.log('Possible West Penn Power matches:', possibleMatches);
-    }
-    
-    return { pennData, westData, sampleData };
-  } catch (error) {
-    console.error('Error in findWestPennPowerVariations:', error);
-    return null;
-  }
-};
-
 // Generic function to get data from any table
 export const getEnergyData = async (tableName: string, zipCode?: string): Promise<PowerSetterData[]> => {
   try {
@@ -126,16 +69,11 @@ export const getPowerSetterData = async (zipCode?: string): Promise<PowerSetterD
   return getEnergyData('powersetter', zipCode);
 };
 
-// Generic function to get utilities from any table
+// Generic function to get utilities from any table - FIXED VERSION
 export const getUtilitiesFromTable = async (tableName: string): Promise<string[]> => {
   try {
     console.log(`=== Starting getUtilities function for ${tableName} ===`);
     console.log(`Querying ${tableName} table for utilities...`);
-    
-    // Run diagnostic search for West Penn Power if this is electricityrates table
-    if (tableName === 'electricityrates') {
-      await findWestPennPowerVariations(tableName);
-    }
     
     // First, let's check if we can connect to the table at all
     console.log(`Step 1: Testing basic table access for ${tableName}...`);
@@ -170,16 +108,15 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
       console.log(`Sample utilities found in ${tableName}:`, sampleUtilities);
     }
     
-    // Now let's specifically query for utilities with better error handling
-    console.log(`Step 2: Querying for utility column in ${tableName}...`);
+    // Now let's get ALL utilities from the table (no limit to ensure we get everything)
+    console.log(`Step 2: Querying for ALL utility values in ${tableName}...`);
     
-    // Use a more robust query that handles different data types and null values
+    // Use a query that gets ALL records, not just a limited subset
     const { data, error } = await supabase
       .from(tableName)
       .select('utility')
       .not('utility', 'is', null)
-      .neq('utility', '')
-      .limit(10000); // Increase limit to get more utilities
+      .neq('utility', '');
     
     if (error) {
       console.error(`Utility query failed for ${tableName}:`, error);
@@ -187,8 +124,7 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
     }
     
     console.log(`Step 2 SUCCESS: Utility query completed for ${tableName}`);
-    console.log('Raw utility data:', data);
-    console.log('Number of records returned:', data?.length || 0);
+    console.log('Total utility records returned:', data?.length || 0);
     
     if (!data || data.length === 0) {
       console.warn(`No records returned from utility query for ${tableName}`);
@@ -199,6 +135,7 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
     console.log(`Step 3: Processing utility values for ${tableName}...`);
     const allUtilities = data.map(row => row.utility);
     console.log('All utility values (first 20):', allUtilities.slice(0, 20));
+    console.log('All utility values (last 20):', allUtilities.slice(-20));
     
     // Filter out null, undefined, and empty strings, and handle different data types
     const validUtilities = allUtilities.filter(utility => {
@@ -211,19 +148,31 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
     });
     
     console.log('Valid utility values (first 20):', validUtilities.slice(0, 20));
+    console.log('Valid utility values (last 20):', validUtilities.slice(-20));
     
     // Get unique utilities and sort them
     const uniqueUtilities = [...new Set(validUtilities.map(u => u.trim()))].sort();
     console.log('Unique utilities:', uniqueUtilities);
     console.log('Final count:', uniqueUtilities.length);
     
-    // Special check for West Penn Power
+    // Special check for West Penn Power and variations
     const westPennVariations = uniqueUtilities.filter(u => 
       u.toLowerCase().includes('west penn') || 
       u.toLowerCase().includes('westpenn') ||
-      u.toLowerCase().includes('west penn power')
+      u.toLowerCase().includes('west penn power') ||
+      u.toLowerCase().includes('penn power')
     );
     console.log('West Penn Power variations found:', westPennVariations);
+    
+    // Additional debugging: check if "West Penn Power" is in the raw data
+    const exactMatch = allUtilities.find(u => u === 'West Penn Power');
+    console.log('Exact "West Penn Power" match found:', exactMatch ? 'YES' : 'NO');
+    
+    // Check for any utility containing "West Penn"
+    const containsWestPenn = allUtilities.filter(u => 
+      u && typeof u === 'string' && u.includes('West Penn')
+    );
+    console.log('Utilities containing "West Penn":', containsWestPenn);
     
     console.log(`=== getUtilities function completed for ${tableName} ===`);
     return uniqueUtilities;

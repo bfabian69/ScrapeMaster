@@ -22,7 +22,6 @@ import {
   Monitor,
   TrendingUp
 } from 'lucide-react';
-import { ScrapedDataViewer } from './components/ScrapedDataViewer';
 import { ResultsViewer } from './components/ResultsViewer';
 import { DashboardStats } from './components/DashboardStats';
 
@@ -94,10 +93,10 @@ function App() {
                 <ArrowRight className="w-5 h-5" />
               </button>
               <button 
-                onClick={() => setActiveTab('data')}
+                onClick={() => setActiveTab('dashboard')}
                 className="bg-white/10 hover:bg-white/20 text-white px-8 py-4 rounded-xl font-semibold transition-all backdrop-blur-sm border border-white/20"
               >
-                View Raw Data
+                View Dashboard
               </button>
             </div>
 
@@ -221,13 +220,6 @@ function App() {
                   <TrendingUp className="w-4 h-4 inline mr-1" />
                   Rate Analysis
                 </button>
-                <button 
-                  onClick={() => setActiveTab('data')}
-                  className={`px-3 py-2 rounded-lg font-medium transition-colors ${activeTab === 'data' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:text-gray-900'}`}
-                >
-                  <Database className="w-4 h-4 inline mr-1" />
-                  Raw Data
-                </button>
               </nav>
             </div>
             <div className="flex items-center space-x-4">
@@ -267,7 +259,7 @@ function App() {
             {/* Quick Actions */}
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
               <h2 className="text-xl font-bold text-gray-900 mb-6">Quick Actions</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
                 <button
                   onClick={() => setActiveTab('results')}
                   className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
@@ -275,22 +267,8 @@ function App() {
                   <div className="flex items-center space-x-3">
                     <TrendingUp className="w-6 h-6 text-blue-600" />
                     <div className="text-left">
-                      <div className="font-semibold text-gray-900">Analyze Rates</div>
+                      <div className="font-semibold text-gray-900">Analyze Energy Rates</div>
                       <div className="text-sm text-gray-500">Compare rates across multiple data sources and utilities</div>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-gray-400" />
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('data')}
-                  className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center space-x-3">
-                    <Database className="w-6 h-6 text-green-600" />
-                    <div className="text-left">
-                      <div className="font-semibold text-gray-900">Browse Raw Data</div>
-                      <div className="text-sm text-gray-500">View and export all energy rate data from all sources</div>
                     </div>
                   </div>
                   <ArrowRight className="w-5 h-5 text-gray-400" />
@@ -303,12 +281,6 @@ function App() {
         {activeTab === 'results' && (
           <div className="space-y-8">
             <ResultsViewer />
-          </div>
-        )}
-
-        {activeTab === 'data' && (
-          <div className="space-y-8">
-            <ScrapedDataViewer />
           </div>
         )}
       </div>

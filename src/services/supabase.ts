@@ -17,6 +17,63 @@ if (!supabaseUrl || !supabaseKey) {
 
 export const supabase = createClient(supabaseUrl || '', supabaseKey || '');
 
+// New diagnostic function to find West Penn Power variations
+export const findWestPennPowerVariations = async (tableName: string = 'electricityrates') => {
+  try {
+    console.log(`=== Searching for West Penn Power variations in ${tableName} table ===`);
+    
+    // Search for any utility containing "penn" (case insensitive)
+    const { data: pennData, error: pennError } = await supabase
+      .from(tableName)
+      .select('utility')
+      .ilike('utility', '%penn%');
+    
+    if (pennError) {
+      console.error('Error searching for Penn utilities:', pennError);
+    } else {
+      console.log('Utilities containing "penn":', pennData?.map(r => r.utility) || []);
+    }
+    
+    // Search for any utility containing "west" (case insensitive)
+    const { data: westData, error: westError } = await supabase
+      .from(tableName)
+      .select('utility')
+      .ilike('utility', '%west%');
+    
+    if (westError) {
+      console.error('Error searching for West utilities:', westError);
+    } else {
+      console.log('Utilities containing "west":', westData?.map(r => r.utility) || []);
+    }
+    
+    // Get a sample of all records to see the exact utility values
+    const { data: sampleData, error: sampleError } = await supabase
+      .from(tableName)
+      .select('utility')
+      .limit(100);
+    
+    if (sampleError) {
+      console.error('Error getting sample data:', sampleError);
+    } else {
+      const allUtilities = [...new Set(sampleData?.map(r => r.utility).filter(u => u))].sort();
+      console.log('All unique utilities in sample (first 50):', allUtilities.slice(0, 50));
+      
+      // Look for any utility that might be West Penn Power with different formatting
+      const possibleMatches = allUtilities.filter(u => 
+        u.toLowerCase().includes('penn') || 
+        u.toLowerCase().includes('west') ||
+        u.toLowerCase().includes('power')
+      );
+      console.log('Possible West Penn Power matches:', possibleMatches);
+    }
+    
+    return { pennData, westData, sampleData };
+  } catch (error) {
+    console.error('Error in findWestPennPowerVariations:', error);
+    return null;
+  }
+};
+
 // Generic function to get data from any table
 export const getEnergyData = async (tableName: string, zipCode?: string): Promise<PowerSetterData[]> => {
   try {
@@ -74,6 +131,11 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
   try {
     console.log(`=== Starting getUtilities function for ${tableName} ===`);
     console.log(`Querying ${tableName} table for utilities...`);
+    
+    // Run diagnostic search for West Penn Power if this is electricityrates table
+    if (tableName === 'electricityrates') {
+      await findWestPennPowerVariations(tableName);
+    }
     
     // First, let's check if we can connect to the table at all
     console.log(`Step 1: Testing basic table access for ${tableName}...`);

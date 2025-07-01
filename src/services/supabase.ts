@@ -17,13 +17,13 @@ if (!supabaseUrl || !supabaseKey) {
 
 export const supabase = createClient(supabaseUrl || '', supabaseKey || '');
 
-// COMPLETELY REWRITTEN: Get data from any table with proper pagination to get ALL records
+// COMPLETELY REWRITTEN: Get data from any table with FORCED pagination to get ALL records
 export const getEnergyData = async (tableName: string, zipCode?: string): Promise<PowerSetterData[]> => {
   try {
     console.log(`=== getEnergyData called for table: ${tableName} ===`);
     console.log('Querying table with zipCode:', zipCode);
     
-    // Step 1: Get total count first
+    // Step 1: Get total count first to know exactly how many records we should expect
     console.log(`Step 1: Getting total record count for ${tableName}...`);
     let countQuery = supabase
       .from(tableName)
@@ -40,65 +40,77 @@ export const getEnergyData = async (tableName: string, zipCode?: string): Promis
       throw countError;
     }
     
-    console.log(`Total records in ${tableName} table${zipCode ? ` for ZIP ${zipCode}` : ''}:`, count);
+    console.log(`🎯 EXPECTED TOTAL RECORDS: ${count} in ${tableName} table${zipCode ? ` for ZIP ${zipCode}` : ''}`);
     
-    // Step 2: Use pagination to get ALL records
-    console.log(`Step 2: Fetching ALL records using pagination...`);
+    if (!count || count === 0) {
+      console.log('No records found, returning empty array');
+      return [];
+    }
+    
+    // Step 2: Use FORCED pagination to get ALL records
+    console.log(`Step 2: Using FORCED pagination to get ALL ${count} records...`);
     
     const allData: PowerSetterData[] = [];
-    let from = 0;
-    const pageSize = 1000;
-    let hasMore = true;
-    let totalProcessed = 0;
+    const pageSize = 1000; // Supabase's default limit
+    const totalPages = Math.ceil(count / pageSize);
     
-    while (hasMore) {
-      console.log(`Fetching batch ${from} to ${from + pageSize - 1}...`);
+    console.log(`📊 PAGINATION PLAN: ${totalPages} pages of ${pageSize} records each`);
+    
+    for (let page = 0; page < totalPages; page++) {
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
+      
+      console.log(`📄 FETCHING PAGE ${page + 1}/${totalPages}: records ${from} to ${to}`);
       
       let query = supabase
         .from(tableName)
         .select('*')
-        .order('scraped_at', { ascending: false })
-        .range(from, from + pageSize - 1);
+        .order('id', { ascending: true }) // Use ID for consistent ordering
+        .range(from, to);
       
       if (zipCode) {
         query = query.eq('zip_code', zipCode);
       }
       
-      const { data: batchData, error: batchError } = await query;
+      const { data: pageData, error: pageError } = await query;
       
-      if (batchError) {
-        console.error(`Error fetching batch ${from}-${from + pageSize - 1}:`, batchError);
-        throw batchError;
+      if (pageError) {
+        console.error(`❌ Error fetching page ${page + 1}:`, pageError);
+        throw pageError;
       }
       
-      if (!batchData || batchData.length === 0) {
-        console.log('No more data, stopping pagination');
-        hasMore = false;
-        break;
+      if (!pageData) {
+        console.warn(`⚠️ Page ${page + 1} returned null data`);
+        continue;
       }
       
-      console.log(`Batch ${from}-${from + pageSize - 1}: ${batchData.length} records`);
-      totalProcessed += batchData.length;
+      console.log(`✅ Page ${page + 1}: Retrieved ${pageData.length} records`);
       
-      // Add this batch to our results
-      allData.push(...batchData);
+      // Add this page to our results
+      allData.push(...pageData);
       
-      // Check if we got a full page (if not, we're at the end)
-      if (batchData.length < pageSize) {
-        console.log('Partial page received, stopping pagination');
-        hasMore = false;
-      } else {
-        from += pageSize;
+      // Check for West Penn Power in this page
+      if (tableName === 'electricityrates') {
+        const westPennInPage = pageData.filter(record => 
+          record.utility && record.utility.includes('West Penn')
+        );
+        if (westPennInPage.length > 0) {
+          console.log(`🎯 FOUND ${westPennInPage.length} West Penn Power records in page ${page + 1}`);
+          console.log('West Penn records:', westPennInPage.map(r => ({ utility: r.utility, zip: r.zip_code })));
+        }
       }
       
-      // Safety check to prevent infinite loops
-      if (from > 100000) {
-        console.warn('Stopping pagination at 100k records to prevent infinite loop');
-        hasMore = false;
+      // Safety check: if we got fewer records than expected and it's not the last page
+      if (pageData.length < pageSize && page < totalPages - 1) {
+        console.warn(`⚠️ Page ${page + 1} returned ${pageData.length} records but expected ${pageSize}. This might indicate an issue.`);
       }
     }
     
-    console.log(`✅ Successfully retrieved ${allData.length} total records from ${tableName}`);
+    console.log(`🎉 PAGINATION COMPLETE: Retrieved ${allData.length} total records (expected ${count})`);
+    
+    if (allData.length !== count) {
+      console.warn(`⚠️ MISMATCH: Expected ${count} records but got ${allData.length}`);
+    }
     
     // ENHANCED DEBUGGING: If this is electricityrates table, let's examine the data more closely
     if (tableName === 'electricityrates' && allData && allData.length > 0) {
@@ -108,40 +120,43 @@ export const getEnergyData = async (tableName: string, zipCode?: string): Promis
       const westPennRecords = allData.filter(record => 
         record.utility && record.utility.includes('West Penn')
       );
-      console.log('🎯 West Penn Power records found in ALL data:', westPennRecords.length);
-      console.log('Sample West Penn Power records:', westPennRecords.slice(0, 3));
+      console.log('🎯 TOTAL West Penn Power records found in ALL data:', westPennRecords.length);
+      
+      if (westPennRecords.length > 0) {
+        console.log('🎯 Sample West Penn Power records:', westPennRecords.slice(0, 5));
+        
+        // Show all unique West Penn variations
+        const westPennVariations = [...new Set(westPennRecords.map(r => r.utility))];
+        console.log('🎯 West Penn utility name variations:', westPennVariations);
+      }
       
       // Show all unique utilities in the returned data
       const utilitiesInData = [...new Set(allData.map(d => d.utility).filter(u => u))];
-      console.log('All utilities in returned data:', utilitiesInData.length, 'unique utilities');
-      console.log('Utilities list:', utilitiesInData.sort());
+      console.log(`📋 ALL UTILITIES in returned data (${utilitiesInData.length} unique):`, utilitiesInData.sort());
       
-      // Check exact utility values
+      // Check for exact "West Penn Power" matches
       const exactWestPenn = allData.filter(record => record.utility === 'West Penn Power');
       console.log('🎯 Exact "West Penn Power" matches:', exactWestPenn.length);
       
-      if (exactWestPenn.length > 0) {
-        console.log('Sample exact West Penn Power record:', exactWestPenn[0]);
-      }
-      
-      // Check for variations
-      const westPennVariations = allData.filter(record => 
+      // Check for all possible West Penn variations
+      const allWestPennVariations = allData.filter(record => 
         record.utility && (
           record.utility.toLowerCase().includes('west penn') ||
+          record.utility.toLowerCase().includes('westpenn') ||
           record.utility.toLowerCase().includes('penn power')
         )
       );
-      console.log('🎯 All West Penn variations found:', westPennVariations.length);
+      console.log('🎯 ALL West Penn variations found:', allWestPennVariations.length);
       
-      if (westPennVariations.length > 0) {
-        const uniqueWestPennNames = [...new Set(westPennVariations.map(r => r.utility))];
-        console.log('🎯 Unique West Penn utility names:', uniqueWestPennNames);
+      if (allWestPennVariations.length > 0) {
+        const uniqueWestPennNames = [...new Set(allWestPennVariations.map(r => r.utility))];
+        console.log('🎯 Unique West Penn utility names found:', uniqueWestPennNames);
       }
     }
     
     return allData || [];
   } catch (error) {
-    console.error(`Supabase query failed for ${tableName}:`, error);
+    console.error(`❌ Supabase query failed for ${tableName}:`, error);
     throw error;
   }
 };
@@ -151,11 +166,10 @@ export const getPowerSetterData = async (zipCode?: string): Promise<PowerSetterD
   return getEnergyData('powersetter', zipCode);
 };
 
-// OPTIMIZED: Get utilities using a more efficient approach with proper pagination
+// COMPLETELY REWRITTEN: Get utilities using FORCED pagination to process ALL records
 export const getUtilitiesFromTable = async (tableName: string): Promise<string[]> => {
   try {
     console.log(`=== Starting getUtilities function for ${tableName} ===`);
-    console.log(`Querying ${tableName} table for utilities...`);
     
     // Step 1: Test basic table access
     console.log(`Step 1: Testing basic table access for ${tableName}...`);
@@ -192,139 +206,78 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
     
     if (countError) {
       console.error('Error getting count:', countError);
-    } else {
-      console.log(`Total records in ${tableName} table:`, count);
+      throw countError;
     }
     
-    // Step 3: Use DISTINCT query to get unique utilities more efficiently
-    console.log(`Step 3: Using DISTINCT query to get unique utilities...`);
+    console.log(`🎯 TOTAL RECORDS in ${tableName} table: ${count}`);
     
-    // Try to use a more efficient approach first
-    try {
-      const { data: distinctData, error: distinctError } = await supabase
-        .from(tableName)
-        .select('utility')
-        .not('utility', 'is', null)
-        .neq('utility', '');
-      
-      if (distinctError) {
-        throw distinctError;
-      }
-      
-      console.log(`Retrieved ${distinctData?.length || 0} utility records`);
-      
-      if (distinctData && distinctData.length > 0) {
-        // Process all utilities
-        const allUtilities = new Set<string>();
-        
-        distinctData.forEach(row => {
-          if (row.utility && typeof row.utility === 'string' && row.utility.trim()) {
-            const cleanUtility = row.utility.trim();
-            allUtilities.add(cleanUtility);
-            
-            // Special logging for West Penn Power
-            if (cleanUtility.includes('West Penn')) {
-              console.log('🎯 Found West Penn Power variant:', cleanUtility);
-            }
-          }
-        });
-        
-        console.log(`Found ${allUtilities.size} unique utilities`);
-        
-        // Convert Set to sorted array
-        const uniqueUtilities = Array.from(allUtilities).sort();
-        console.log('Final unique utilities:', uniqueUtilities);
-        
-        // Special check for West Penn Power and variations
-        const westPennVariations = uniqueUtilities.filter(u => 
-          u.toLowerCase().includes('west penn') || 
-          u.toLowerCase().includes('westpenn') ||
-          u.toLowerCase().includes('west penn power') ||
-          u.toLowerCase().includes('penn power')
-        );
-        console.log('🎯 West Penn Power variations found:', westPennVariations);
-        
-        // Check for exact match
-        const exactMatch = uniqueUtilities.find(u => u === 'West Penn Power');
-        console.log('🎯 Exact "West Penn Power" match found:', exactMatch ? 'YES' : 'NO');
-        
-        console.log(`=== getUtilities function completed for ${tableName} ===`);
-        console.log(`Final result: ${uniqueUtilities.length} utilities`);
-        
-        return uniqueUtilities;
-      }
-    } catch (distinctError) {
-      console.log('DISTINCT query failed, falling back to pagination approach:', distinctError.message);
+    if (!count || count === 0) {
+      console.log('No records found, returning empty array');
+      return [];
     }
     
-    // Fallback: Use pagination approach if DISTINCT fails
-    console.log(`Step 3 FALLBACK: Using pagination to get ALL utilities...`);
+    // Step 3: Use FORCED pagination to get ALL utilities from ALL records
+    console.log(`Step 3: Using FORCED pagination to get utilities from ALL ${count} records...`);
     
     const allUtilities = new Set<string>();
-    let from = 0;
     const pageSize = 1000;
-    let hasMore = true;
-    let totalProcessed = 0;
+    const totalPages = Math.ceil(count / pageSize);
     
-    while (hasMore) {
-      console.log(`Fetching utilities batch ${from} to ${from + pageSize - 1}...`);
+    console.log(`📊 UTILITIES PAGINATION PLAN: ${totalPages} pages of ${pageSize} records each`);
+    
+    for (let page = 0; page < totalPages; page++) {
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
       
-      const { data: batchData, error: batchError } = await supabase
+      console.log(`📄 FETCHING UTILITIES PAGE ${page + 1}/${totalPages}: records ${from} to ${to}`);
+      
+      const { data: pageData, error: pageError } = await supabase
         .from(tableName)
         .select('utility')
         .not('utility', 'is', null)
         .neq('utility', '')
-        .range(from, from + pageSize - 1);
+        .order('id', { ascending: true })
+        .range(from, to);
       
-      if (batchError) {
-        console.error(`Error fetching batch ${from}-${from + pageSize - 1}:`, batchError);
-        throw batchError;
+      if (pageError) {
+        console.error(`❌ Error fetching utilities page ${page + 1}:`, pageError);
+        throw pageError;
       }
       
-      if (!batchData || batchData.length === 0) {
-        console.log('No more data, stopping pagination');
-        hasMore = false;
-        break;
+      if (!pageData) {
+        console.warn(`⚠️ Utilities page ${page + 1} returned null data`);
+        continue;
       }
       
-      console.log(`Batch ${from}-${from + pageSize - 1}: ${batchData.length} records`);
-      totalProcessed += batchData.length;
+      console.log(`✅ Utilities page ${page + 1}: Retrieved ${pageData.length} records`);
       
-      // Process this batch and add utilities to our set
-      batchData.forEach(row => {
+      // Process this page and add utilities to our set
+      let westPennFoundInPage = 0;
+      pageData.forEach(row => {
         if (row.utility && typeof row.utility === 'string' && row.utility.trim()) {
           const cleanUtility = row.utility.trim();
           allUtilities.add(cleanUtility);
           
           // Special logging for West Penn Power
           if (cleanUtility.includes('West Penn')) {
-            console.log('🎯 Found West Penn Power variant:', cleanUtility);
+            westPennFoundInPage++;
+            console.log(`🎯 Found West Penn Power variant in page ${page + 1}:`, cleanUtility);
           }
         }
       });
       
-      console.log(`Current unique utilities count: ${allUtilities.size}`);
-      
-      // Check if we got a full page (if not, we're at the end)
-      if (batchData.length < pageSize) {
-        console.log('Partial page received, stopping pagination');
-        hasMore = false;
-      } else {
-        from += pageSize;
+      if (westPennFoundInPage > 0) {
+        console.log(`🎯 Page ${page + 1} contained ${westPennFoundInPage} West Penn Power records`);
       }
       
-      // Safety check to prevent infinite loops
-      if (from > 100000) {
-        console.warn('Stopping pagination at 100k records to prevent infinite loop');
-        hasMore = false;
-      }
+      console.log(`📊 Current unique utilities count after page ${page + 1}: ${allUtilities.size}`);
     }
     
-    console.log(`Step 3 SUCCESS: Processed ${totalProcessed} records, found ${allUtilities.size} unique utilities`);
+    console.log(`🎉 UTILITIES PAGINATION COMPLETE: Found ${allUtilities.size} unique utilities from ${count} total records`);
     
     // Convert Set to sorted array
     const uniqueUtilities = Array.from(allUtilities).sort();
-    console.log('Final unique utilities:', uniqueUtilities);
+    console.log('📋 Final unique utilities list:', uniqueUtilities);
     
     // Special check for West Penn Power and variations
     const westPennVariations = uniqueUtilities.filter(u => 
@@ -333,14 +286,14 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
       u.toLowerCase().includes('west penn power') ||
       u.toLowerCase().includes('penn power')
     );
-    console.log('🎯 West Penn Power variations found:', westPennVariations);
+    console.log('🎯 West Penn Power variations found in final list:', westPennVariations);
     
     // Check for exact match
     const exactMatch = uniqueUtilities.find(u => u === 'West Penn Power');
     console.log('🎯 Exact "West Penn Power" match found:', exactMatch ? 'YES' : 'NO');
     
     console.log(`=== getUtilities function completed for ${tableName} ===`);
-    console.log(`Final result: ${uniqueUtilities.length} utilities`);
+    console.log(`🎉 FINAL RESULT: ${uniqueUtilities.length} utilities`);
     
     return uniqueUtilities;
     

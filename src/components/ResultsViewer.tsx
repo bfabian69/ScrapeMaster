@@ -260,11 +260,65 @@ export const ResultsViewer: React.FC = () => {
       console.log('=== Loading Rates Data ===');
       console.log('Loading rates data for utility:', selectedUtility, 'from table:', selectedTable);
       setLoading(true);
-      const ratesData = await getEnergyData(selectedTable);
       
-      // Filter by utility
-      const filteredData = ratesData.filter(rate => rate.utility === selectedUtility);
-      console.log('Filtered data for', selectedUtility, 'from', selectedTable, ':', filteredData.length, 'records');
+      // ENHANCED DEBUGGING: Get ALL data first, then filter
+      console.log('Step 1: Getting ALL data from', selectedTable, 'table...');
+      const allRatesData = await getEnergyData(selectedTable);
+      console.log('Total records retrieved from', selectedTable, ':', allRatesData.length);
+      
+      // ENHANCED DEBUGGING: Check what utilities are actually in the data
+      const utilitiesInAllData = [...new Set(allRatesData.map(rate => rate.utility).filter(u => u))];
+      console.log('All utilities found in the data:', utilitiesInAllData);
+      
+      // ENHANCED DEBUGGING: Check for exact matches
+      const exactMatches = allRatesData.filter(rate => rate.utility === selectedUtility);
+      console.log(`Exact matches for "${selectedUtility}":`, exactMatches.length);
+      
+      // ENHANCED DEBUGGING: Check for partial matches (case insensitive)
+      const partialMatches = allRatesData.filter(rate => 
+        rate.utility && rate.utility.toLowerCase().includes(selectedUtility.toLowerCase())
+      );
+      console.log(`Partial matches for "${selectedUtility}":`, partialMatches.length);
+      
+      // ENHANCED DEBUGGING: Check for West Penn Power specifically
+      if (selectedUtility.includes('West Penn')) {
+        const westPennMatches = allRatesData.filter(rate => 
+          rate.utility && (
+            rate.utility.includes('West Penn') ||
+            rate.utility.includes('west penn') ||
+            rate.utility.toLowerCase().includes('west penn')
+          )
+        );
+        console.log('West Penn Power variations found in data:', westPennMatches.length);
+        console.log('Sample West Penn records:', westPennMatches.slice(0, 3));
+      }
+      
+      // Filter by utility (use exact match first, then fallback to partial)
+      let filteredData = exactMatches;
+      if (filteredData.length === 0) {
+        console.log('No exact matches found, trying partial matches...');
+        filteredData = partialMatches;
+      }
+      
+      console.log('Final filtered data for', selectedUtility, 'from', selectedTable, ':', filteredData.length, 'records');
+      
+      if (filteredData.length === 0) {
+        console.warn('❌ NO DATA FOUND for utility:', selectedUtility);
+        console.log('Available utilities in data:', utilitiesInAllData);
+        console.log('Selected utility exact string:', JSON.stringify(selectedUtility));
+        console.log('Checking for string comparison issues...');
+        
+        // Check for whitespace or encoding issues
+        utilitiesInAllData.forEach(util => {
+          if (util.trim() === selectedUtility.trim()) {
+            console.log('Found match after trimming:', util);
+          }
+          if (util.toLowerCase() === selectedUtility.toLowerCase()) {
+            console.log('Found match after lowercasing:', util);
+          }
+        });
+      }
+      
       setData(filteredData);
       
       // Group by utility and date (matching Flask app logic)
@@ -813,6 +867,9 @@ export const ResultsViewer: React.FC = () => {
           <Database className="w-16 h-16 mx-auto mb-4 text-gray-300" />
           <h3 className="text-xl font-semibold text-gray-900 mb-2">No Data Available</h3>
           <p className="text-gray-600">No energy rate data found for {selectedUtility} in the {getTableDisplayName(selectedTable)} table.</p>
+          <div className="mt-4 p-3 bg-gray-50 rounded text-xs text-gray-600 font-mono">
+            Debug: Check console for detailed filtering information
+          </div>
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

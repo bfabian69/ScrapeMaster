@@ -56,6 +56,30 @@ export const getEnergyData = async (tableName: string, zipCode?: string): Promis
       recordCount: data?.length || 0,
       sampleRecord: data?.[0] || null
     });
+
+    // ENHANCED DEBUGGING: If this is electricityrates table, let's examine the data more closely
+    if (tableName === 'electricityrates' && data && data.length > 0) {
+      console.log('=== ENHANCED DEBUGGING FOR ELECTRICITYRATES ===');
+      
+      // Check for West Penn Power specifically
+      const westPennRecords = data.filter(record => 
+        record.utility && record.utility.includes('West Penn')
+      );
+      console.log('West Penn Power records found in data:', westPennRecords.length);
+      console.log('Sample West Penn Power records:', westPennRecords.slice(0, 3));
+      
+      // Show all unique utilities in the returned data
+      const utilitiesInData = [...new Set(data.map(d => d.utility).filter(u => u))];
+      console.log('All utilities in returned data:', utilitiesInData);
+      
+      // Check exact utility values
+      const exactWestPenn = data.filter(record => record.utility === 'West Penn Power');
+      console.log('Exact "West Penn Power" matches:', exactWestPenn.length);
+      
+      if (exactWestPenn.length > 0) {
+        console.log('Sample exact West Penn Power record:', exactWestPenn[0]);
+      }
+    }
     
     return data || [];
   } catch (error) {

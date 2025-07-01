@@ -69,13 +69,13 @@ export const getPowerSetterData = async (zipCode?: string): Promise<PowerSetterD
   return getEnergyData('powersetter', zipCode);
 };
 
-// Generic function to get utilities from any table - FIXED VERSION
+// Generic function to get utilities from any table - COMPLETELY REWRITTEN
 export const getUtilitiesFromTable = async (tableName: string): Promise<string[]> => {
   try {
     console.log(`=== Starting getUtilities function for ${tableName} ===`);
     console.log(`Querying ${tableName} table for utilities...`);
     
-    // First, let's check if we can connect to the table at all
+    // Step 1: Test basic table access
     console.log(`Step 1: Testing basic table access for ${tableName}...`);
     const { data: testData, error: testError } = await supabase
       .from(tableName)
@@ -102,58 +102,79 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
     console.log(`Step 1 SUCCESS: Basic table access works for ${tableName}`);
     console.log(`Sample records from ${tableName} table:`, testData);
     
-    // Log all unique utilities found in the sample data
-    if (testData && testData.length > 0) {
-      const sampleUtilities = [...new Set(testData.map(record => record.utility).filter(u => u))];
-      console.log(`Sample utilities found in ${tableName}:`, sampleUtilities);
-    }
+    // Step 2: Use a different approach - get DISTINCT utilities directly
+    console.log(`Step 2: Getting DISTINCT utilities from ${tableName}...`);
     
-    // Now let's get ALL utilities from the table (no limit to ensure we get everything)
-    console.log(`Step 2: Querying for ALL utility values in ${tableName}...`);
-    
-    // Use a query that gets ALL records, not just a limited subset
-    const { data, error } = await supabase
+    // Use the RPC approach or a more efficient query to get all unique utilities
+    // First, let's try to get the total count to understand the data size
+    const { count, error: countError } = await supabase
       .from(tableName)
-      .select('utility')
-      .not('utility', 'is', null)
-      .neq('utility', '');
+      .select('*', { count: 'exact', head: true });
     
-    if (error) {
-      console.error(`Utility query failed for ${tableName}:`, error);
-      throw error;
+    if (countError) {
+      console.error('Error getting count:', countError);
+    } else {
+      console.log(`Total records in ${tableName} table:`, count);
     }
     
-    console.log(`Step 2 SUCCESS: Utility query completed for ${tableName}`);
-    console.log('Total utility records returned:', data?.length || 0);
+    // Now get ALL utilities using pagination to avoid limits
+    console.log(`Step 3: Fetching ALL utilities using pagination...`);
     
-    if (!data || data.length === 0) {
-      console.warn(`No records returned from utility query for ${tableName}`);
-      return [];
-    }
+    const allUtilities = new Set<string>();
+    let from = 0;
+    const pageSize = 1000;
+    let hasMore = true;
     
-    // Let's examine the actual utility values
-    console.log(`Step 3: Processing utility values for ${tableName}...`);
-    const allUtilities = data.map(row => row.utility);
-    console.log('All utility values (first 20):', allUtilities.slice(0, 20));
-    console.log('All utility values (last 20):', allUtilities.slice(-20));
-    
-    // Filter out null, undefined, and empty strings, and handle different data types
-    const validUtilities = allUtilities.filter(utility => {
-      if (!utility) return false;
-      if (typeof utility !== 'string') {
-        console.log('Non-string utility found:', utility, typeof utility);
-        return false;
+    while (hasMore) {
+      console.log(`Fetching utilities batch ${from} to ${from + pageSize - 1}...`);
+      
+      const { data: batchData, error: batchError } = await supabase
+        .from(tableName)
+        .select('utility')
+        .not('utility', 'is', null)
+        .neq('utility', '')
+        .range(from, from + pageSize - 1);
+      
+      if (batchError) {
+        console.error(`Error fetching batch ${from}-${from + pageSize - 1}:`, batchError);
+        throw batchError;
       }
-      return utility.trim().length > 0;
-    });
+      
+      if (!batchData || batchData.length === 0) {
+        console.log('No more data, stopping pagination');
+        hasMore = false;
+        break;
+      }
+      
+      console.log(`Batch ${from}-${from + pageSize - 1}: ${batchData.length} records`);
+      
+      // Process this batch
+      batchData.forEach(row => {
+        if (row.utility && typeof row.utility === 'string' && row.utility.trim()) {
+          allUtilities.add(row.utility.trim());
+        }
+      });
+      
+      // Check if we got a full page (if not, we're at the end)
+      if (batchData.length < pageSize) {
+        console.log('Partial page received, stopping pagination');
+        hasMore = false;
+      } else {
+        from += pageSize;
+      }
+      
+      // Safety check to prevent infinite loops
+      if (from > 50000) {
+        console.warn('Stopping pagination at 50k records to prevent infinite loop');
+        hasMore = false;
+      }
+    }
     
-    console.log('Valid utility values (first 20):', validUtilities.slice(0, 20));
-    console.log('Valid utility values (last 20):', validUtilities.slice(-20));
+    console.log(`Step 3 SUCCESS: Collected ${allUtilities.size} unique utilities`);
     
-    // Get unique utilities and sort them
-    const uniqueUtilities = [...new Set(validUtilities.map(u => u.trim()))].sort();
-    console.log('Unique utilities:', uniqueUtilities);
-    console.log('Final count:', uniqueUtilities.length);
+    // Convert Set to sorted array
+    const uniqueUtilities = Array.from(allUtilities).sort();
+    console.log('Final unique utilities:', uniqueUtilities);
     
     // Special check for West Penn Power and variations
     const westPennVariations = uniqueUtilities.filter(u => 
@@ -164,17 +185,13 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
     );
     console.log('West Penn Power variations found:', westPennVariations);
     
-    // Additional debugging: check if "West Penn Power" is in the raw data
-    const exactMatch = allUtilities.find(u => u === 'West Penn Power');
+    // Check for exact match
+    const exactMatch = uniqueUtilities.find(u => u === 'West Penn Power');
     console.log('Exact "West Penn Power" match found:', exactMatch ? 'YES' : 'NO');
     
-    // Check for any utility containing "West Penn"
-    const containsWestPenn = allUtilities.filter(u => 
-      u && typeof u === 'string' && u.includes('West Penn')
-    );
-    console.log('Utilities containing "West Penn":', containsWestPenn);
-    
     console.log(`=== getUtilities function completed for ${tableName} ===`);
+    console.log(`Final result: ${uniqueUtilities.length} utilities`);
+    
     return uniqueUtilities;
     
   } catch (error) {

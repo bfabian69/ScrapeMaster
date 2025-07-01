@@ -80,7 +80,7 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
     const { data: testData, error: testError } = await supabase
       .from(tableName)
       .select('*')
-      .limit(5);
+      .limit(10);
     
     if (testError) {
       console.error(`Basic table access failed for ${tableName}:`, testError);
@@ -102,13 +102,22 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
     console.log(`Step 1 SUCCESS: Basic table access works for ${tableName}`);
     console.log(`Sample records from ${tableName} table:`, testData);
     
-    // Now let's specifically query for utilities
+    // Log all unique utilities found in the sample data
+    if (testData && testData.length > 0) {
+      const sampleUtilities = [...new Set(testData.map(record => record.utility).filter(u => u))];
+      console.log(`Sample utilities found in ${tableName}:`, sampleUtilities);
+    }
+    
+    // Now let's specifically query for utilities with better error handling
     console.log(`Step 2: Querying for utility column in ${tableName}...`);
+    
+    // Use a more robust query that handles different data types and null values
     const { data, error } = await supabase
       .from(tableName)
       .select('utility')
       .not('utility', 'is', null)
-      .limit(1000);
+      .neq('utility', '')
+      .limit(10000); // Increase limit to get more utilities
     
     if (error) {
       console.error(`Utility query failed for ${tableName}:`, error);
@@ -127,20 +136,32 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
     // Let's examine the actual utility values
     console.log(`Step 3: Processing utility values for ${tableName}...`);
     const allUtilities = data.map(row => row.utility);
-    console.log('All utility values (including nulls/empty):', allUtilities);
+    console.log('All utility values (first 20):', allUtilities.slice(0, 20));
     
-    // Filter out null, undefined, and empty strings
-    const validUtilities = allUtilities.filter(utility => 
-      utility && 
-      utility.trim && 
-      utility.trim().length > 0
-    );
-    console.log('Valid utility values:', validUtilities);
+    // Filter out null, undefined, and empty strings, and handle different data types
+    const validUtilities = allUtilities.filter(utility => {
+      if (!utility) return false;
+      if (typeof utility !== 'string') {
+        console.log('Non-string utility found:', utility, typeof utility);
+        return false;
+      }
+      return utility.trim().length > 0;
+    });
     
-    // Get unique utilities
+    console.log('Valid utility values (first 20):', validUtilities.slice(0, 20));
+    
+    // Get unique utilities and sort them
     const uniqueUtilities = [...new Set(validUtilities.map(u => u.trim()))].sort();
     console.log('Unique utilities:', uniqueUtilities);
     console.log('Final count:', uniqueUtilities.length);
+    
+    // Special check for West Penn Power
+    const westPennVariations = uniqueUtilities.filter(u => 
+      u.toLowerCase().includes('west penn') || 
+      u.toLowerCase().includes('westpenn') ||
+      u.toLowerCase().includes('west penn power')
+    );
+    console.log('West Penn Power variations found:', westPennVariations);
     
     console.log(`=== getUtilities function completed for ${tableName} ===`);
     return uniqueUtilities;
@@ -491,11 +512,30 @@ export const getAvailableTables = async (): Promise<string[]> => {
   for (const table of tables) {
     try {
       const result = await testTableConnection(table);
-      if (result.success && result.recordCount && result.recordCount > 0) {
+      if (result.success) {
         availableTables.push(table);
       }
     } catch (error) {
       console.log(`Table ${table} not available:`, error.message);
+    }
+  }
+  
+  // Always include tables that exist, even if they're empty
+  // This ensures the UI shows all available data sources
+  if (availableTables.length === 0) {
+    // Fallback: try to detect which tables exist by attempting basic queries
+    for (const table of tables) {
+      try {
+        const { error } = await supabase
+          .from(table)
+          .select('*', { count: 'exact', head: true });
+        
+        if (!error) {
+          availableTables.push(table);
+        }
+      } catch (error) {
+        console.log(`Table ${table} does not exist or is not accessible`);
+      }
     }
   }
   

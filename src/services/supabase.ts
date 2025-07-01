@@ -93,7 +93,7 @@ export const getPowerSetterData = async (zipCode?: string): Promise<PowerSetterD
   return getEnergyData('powersetter', zipCode);
 };
 
-// Generic function to get utilities from any table - COMPLETELY REWRITTEN
+// COMPLETELY REWRITTEN: Get utilities using a more efficient approach
 export const getUtilitiesFromTable = async (tableName: string): Promise<string[]> => {
   try {
     console.log(`=== Starting getUtilities function for ${tableName} ===`);
@@ -104,7 +104,7 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
     const { data: testData, error: testError } = await supabase
       .from(tableName)
       .select('*')
-      .limit(10);
+      .limit(5);
     
     if (testError) {
       console.error(`Basic table access failed for ${tableName}:`, testError);
@@ -126,11 +126,8 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
     console.log(`Step 1 SUCCESS: Basic table access works for ${tableName}`);
     console.log(`Sample records from ${tableName} table:`, testData);
     
-    // Step 2: Use a different approach - get DISTINCT utilities directly
-    console.log(`Step 2: Getting DISTINCT utilities from ${tableName}...`);
-    
-    // Use the RPC approach or a more efficient query to get all unique utilities
-    // First, let's try to get the total count to understand the data size
+    // Step 2: Get total count to understand data size
+    console.log(`Step 2: Getting total record count for ${tableName}...`);
     const { count, error: countError } = await supabase
       .from(tableName)
       .select('*', { count: 'exact', head: true });
@@ -141,13 +138,14 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
       console.log(`Total records in ${tableName} table:`, count);
     }
     
-    // Now get ALL utilities using pagination to avoid limits
+    // Step 3: Use a more efficient approach - get ALL utilities using pagination
     console.log(`Step 3: Fetching ALL utilities using pagination...`);
     
     const allUtilities = new Set<string>();
     let from = 0;
     const pageSize = 1000;
     let hasMore = true;
+    let totalProcessed = 0;
     
     while (hasMore) {
       console.log(`Fetching utilities batch ${from} to ${from + pageSize - 1}...`);
@@ -171,13 +169,22 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
       }
       
       console.log(`Batch ${from}-${from + pageSize - 1}: ${batchData.length} records`);
+      totalProcessed += batchData.length;
       
-      // Process this batch
+      // Process this batch and add utilities to our set
       batchData.forEach(row => {
         if (row.utility && typeof row.utility === 'string' && row.utility.trim()) {
-          allUtilities.add(row.utility.trim());
+          const cleanUtility = row.utility.trim();
+          allUtilities.add(cleanUtility);
+          
+          // Special logging for West Penn Power
+          if (cleanUtility.includes('West Penn')) {
+            console.log('🎯 Found West Penn Power variant:', cleanUtility);
+          }
         }
       });
+      
+      console.log(`Current unique utilities count: ${allUtilities.size}`);
       
       // Check if we got a full page (if not, we're at the end)
       if (batchData.length < pageSize) {
@@ -188,13 +195,13 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
       }
       
       // Safety check to prevent infinite loops
-      if (from > 50000) {
-        console.warn('Stopping pagination at 50k records to prevent infinite loop');
+      if (from > 100000) {
+        console.warn('Stopping pagination at 100k records to prevent infinite loop');
         hasMore = false;
       }
     }
     
-    console.log(`Step 3 SUCCESS: Collected ${allUtilities.size} unique utilities`);
+    console.log(`Step 3 SUCCESS: Processed ${totalProcessed} records, found ${allUtilities.size} unique utilities`);
     
     // Convert Set to sorted array
     const uniqueUtilities = Array.from(allUtilities).sort();
@@ -207,7 +214,7 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
       u.toLowerCase().includes('west penn power') ||
       u.toLowerCase().includes('penn power')
     );
-    console.log('West Penn Power variations found:', westPennVariations);
+    console.log('🎯 West Penn Power variations found:', westPennVariations);
     
     // Check for exact match
     const exactMatch = uniqueUtilities.find(u => u === 'West Penn Power');

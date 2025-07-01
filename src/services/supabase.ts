@@ -17,71 +17,129 @@ if (!supabaseUrl || !supabaseKey) {
 
 export const supabase = createClient(supabaseUrl || '', supabaseKey || '');
 
-// Generic function to get data from any table
+// COMPLETELY REWRITTEN: Get data from any table with proper pagination to get ALL records
 export const getEnergyData = async (tableName: string, zipCode?: string): Promise<PowerSetterData[]> => {
   try {
     console.log(`=== getEnergyData called for table: ${tableName} ===`);
     console.log('Querying table with zipCode:', zipCode);
     
-    let query = supabase
+    // Step 1: Get total count first
+    console.log(`Step 1: Getting total record count for ${tableName}...`);
+    let countQuery = supabase
       .from(tableName)
-      .select('*')
-      .order('scraped_at', { ascending: false });
+      .select('*', { count: 'exact', head: true });
     
     if (zipCode) {
-      query = query.eq('zip_code', zipCode);
+      countQuery = countQuery.eq('zip_code', zipCode);
     }
     
-    console.log(`Executing query on ${tableName} table...`);
-    const { data, error } = await query;
+    const { count, error: countError } = await countQuery;
     
-    if (error) {
-      console.error(`Error fetching data from ${tableName} table:`, error);
-      console.error('Error details:', {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code
-      });
+    if (countError) {
+      console.error(`Error getting count from ${tableName}:`, countError);
+      throw countError;
+    }
+    
+    console.log(`Total records in ${tableName} table${zipCode ? ` for ZIP ${zipCode}` : ''}:`, count);
+    
+    // Step 2: Use pagination to get ALL records
+    console.log(`Step 2: Fetching ALL records using pagination...`);
+    
+    const allData: PowerSetterData[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+    let totalProcessed = 0;
+    
+    while (hasMore) {
+      console.log(`Fetching batch ${from} to ${from + pageSize - 1}...`);
       
-      // Check if this is an RLS policy issue
-      if (error.code === 'PGRST116' || error.message.includes('row-level security')) {
-        throw new Error(`Database access denied for ${tableName} table. This may be due to Row Level Security policies. Please check your database permissions.`);
+      let query = supabase
+        .from(tableName)
+        .select('*')
+        .order('scraped_at', { ascending: false })
+        .range(from, from + pageSize - 1);
+      
+      if (zipCode) {
+        query = query.eq('zip_code', zipCode);
       }
       
-      throw error;
+      const { data: batchData, error: batchError } = await query;
+      
+      if (batchError) {
+        console.error(`Error fetching batch ${from}-${from + pageSize - 1}:`, batchError);
+        throw batchError;
+      }
+      
+      if (!batchData || batchData.length === 0) {
+        console.log('No more data, stopping pagination');
+        hasMore = false;
+        break;
+      }
+      
+      console.log(`Batch ${from}-${from + pageSize - 1}: ${batchData.length} records`);
+      totalProcessed += batchData.length;
+      
+      // Add this batch to our results
+      allData.push(...batchData);
+      
+      // Check if we got a full page (if not, we're at the end)
+      if (batchData.length < pageSize) {
+        console.log('Partial page received, stopping pagination');
+        hasMore = false;
+      } else {
+        from += pageSize;
+      }
+      
+      // Safety check to prevent infinite loops
+      if (from > 100000) {
+        console.warn('Stopping pagination at 100k records to prevent infinite loop');
+        hasMore = false;
+      }
     }
     
-    console.log(`${tableName} data query result:`, {
-      recordCount: data?.length || 0,
-      sampleRecord: data?.[0] || null
-    });
-
+    console.log(`✅ Successfully retrieved ${allData.length} total records from ${tableName}`);
+    
     // ENHANCED DEBUGGING: If this is electricityrates table, let's examine the data more closely
-    if (tableName === 'electricityrates' && data && data.length > 0) {
+    if (tableName === 'electricityrates' && allData && allData.length > 0) {
       console.log('=== ENHANCED DEBUGGING FOR ELECTRICITYRATES ===');
       
       // Check for West Penn Power specifically
-      const westPennRecords = data.filter(record => 
+      const westPennRecords = allData.filter(record => 
         record.utility && record.utility.includes('West Penn')
       );
-      console.log('West Penn Power records found in data:', westPennRecords.length);
+      console.log('🎯 West Penn Power records found in ALL data:', westPennRecords.length);
       console.log('Sample West Penn Power records:', westPennRecords.slice(0, 3));
       
       // Show all unique utilities in the returned data
-      const utilitiesInData = [...new Set(data.map(d => d.utility).filter(u => u))];
-      console.log('All utilities in returned data:', utilitiesInData);
+      const utilitiesInData = [...new Set(allData.map(d => d.utility).filter(u => u))];
+      console.log('All utilities in returned data:', utilitiesInData.length, 'unique utilities');
+      console.log('Utilities list:', utilitiesInData.sort());
       
       // Check exact utility values
-      const exactWestPenn = data.filter(record => record.utility === 'West Penn Power');
-      console.log('Exact "West Penn Power" matches:', exactWestPenn.length);
+      const exactWestPenn = allData.filter(record => record.utility === 'West Penn Power');
+      console.log('🎯 Exact "West Penn Power" matches:', exactWestPenn.length);
       
       if (exactWestPenn.length > 0) {
         console.log('Sample exact West Penn Power record:', exactWestPenn[0]);
       }
+      
+      // Check for variations
+      const westPennVariations = allData.filter(record => 
+        record.utility && (
+          record.utility.toLowerCase().includes('west penn') ||
+          record.utility.toLowerCase().includes('penn power')
+        )
+      );
+      console.log('🎯 All West Penn variations found:', westPennVariations.length);
+      
+      if (westPennVariations.length > 0) {
+        const uniqueWestPennNames = [...new Set(westPennVariations.map(r => r.utility))];
+        console.log('🎯 Unique West Penn utility names:', uniqueWestPennNames);
+      }
     }
     
-    return data || [];
+    return allData || [];
   } catch (error) {
     console.error(`Supabase query failed for ${tableName}:`, error);
     throw error;
@@ -93,7 +151,7 @@ export const getPowerSetterData = async (zipCode?: string): Promise<PowerSetterD
   return getEnergyData('powersetter', zipCode);
 };
 
-// COMPLETELY REWRITTEN: Get utilities using a more efficient approach
+// OPTIMIZED: Get utilities using a more efficient approach with proper pagination
 export const getUtilitiesFromTable = async (tableName: string): Promise<string[]> => {
   try {
     console.log(`=== Starting getUtilities function for ${tableName} ===`);
@@ -138,8 +196,69 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
       console.log(`Total records in ${tableName} table:`, count);
     }
     
-    // Step 3: Use a more efficient approach - get ALL utilities using pagination
-    console.log(`Step 3: Fetching ALL utilities using pagination...`);
+    // Step 3: Use DISTINCT query to get unique utilities more efficiently
+    console.log(`Step 3: Using DISTINCT query to get unique utilities...`);
+    
+    // Try to use a more efficient approach first
+    try {
+      const { data: distinctData, error: distinctError } = await supabase
+        .from(tableName)
+        .select('utility')
+        .not('utility', 'is', null)
+        .neq('utility', '');
+      
+      if (distinctError) {
+        throw distinctError;
+      }
+      
+      console.log(`Retrieved ${distinctData?.length || 0} utility records`);
+      
+      if (distinctData && distinctData.length > 0) {
+        // Process all utilities
+        const allUtilities = new Set<string>();
+        
+        distinctData.forEach(row => {
+          if (row.utility && typeof row.utility === 'string' && row.utility.trim()) {
+            const cleanUtility = row.utility.trim();
+            allUtilities.add(cleanUtility);
+            
+            // Special logging for West Penn Power
+            if (cleanUtility.includes('West Penn')) {
+              console.log('🎯 Found West Penn Power variant:', cleanUtility);
+            }
+          }
+        });
+        
+        console.log(`Found ${allUtilities.size} unique utilities`);
+        
+        // Convert Set to sorted array
+        const uniqueUtilities = Array.from(allUtilities).sort();
+        console.log('Final unique utilities:', uniqueUtilities);
+        
+        // Special check for West Penn Power and variations
+        const westPennVariations = uniqueUtilities.filter(u => 
+          u.toLowerCase().includes('west penn') || 
+          u.toLowerCase().includes('westpenn') ||
+          u.toLowerCase().includes('west penn power') ||
+          u.toLowerCase().includes('penn power')
+        );
+        console.log('🎯 West Penn Power variations found:', westPennVariations);
+        
+        // Check for exact match
+        const exactMatch = uniqueUtilities.find(u => u === 'West Penn Power');
+        console.log('🎯 Exact "West Penn Power" match found:', exactMatch ? 'YES' : 'NO');
+        
+        console.log(`=== getUtilities function completed for ${tableName} ===`);
+        console.log(`Final result: ${uniqueUtilities.length} utilities`);
+        
+        return uniqueUtilities;
+      }
+    } catch (distinctError) {
+      console.log('DISTINCT query failed, falling back to pagination approach:', distinctError.message);
+    }
+    
+    // Fallback: Use pagination approach if DISTINCT fails
+    console.log(`Step 3 FALLBACK: Using pagination to get ALL utilities...`);
     
     const allUtilities = new Set<string>();
     let from = 0;
@@ -218,7 +337,7 @@ export const getUtilitiesFromTable = async (tableName: string): Promise<string[]
     
     // Check for exact match
     const exactMatch = uniqueUtilities.find(u => u === 'West Penn Power');
-    console.log('Exact "West Penn Power" match found:', exactMatch ? 'YES' : 'NO');
+    console.log('🎯 Exact "West Penn Power" match found:', exactMatch ? 'YES' : 'NO');
     
     console.log(`=== getUtilities function completed for ${tableName} ===`);
     console.log(`Final result: ${uniqueUtilities.length} utilities`);
